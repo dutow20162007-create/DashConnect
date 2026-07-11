@@ -79,9 +79,14 @@ git push origin main
 if ($LASTEXITCODE -ne 0) { throw "git push failed" }
 
 # 8. Release: update existing tag or create a new one.
+# NB: gh writes "release not found" to stderr for a missing tag; under EAP=Stop that would
+# terminate the script, so relax it just for the existence probe and read the real exit code.
 $tag = "v$cur"
-gh release view $tag *> $null 2>&1
-if ($LASTEXITCODE -eq 0) {
+$ErrorActionPreference = 'SilentlyContinue'
+gh release view $tag > $null 2>&1
+$exists = ($LASTEXITCODE -eq 0)
+$ErrorActionPreference = 'Stop'
+if ($exists) {
     gh release upload $tag $msi (Join-Path $root 'dist\DashConnect.exe') --clobber
     Write-Host "[publish] assets refreshed on release $tag" -ForegroundColor Green
 } else {
