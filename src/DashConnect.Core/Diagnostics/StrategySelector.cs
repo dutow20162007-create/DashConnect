@@ -92,10 +92,13 @@ public sealed class StrategySelector
             Log.Info("selector",
                 $"'{strategy.Name}': {CriticalOpen(report)}/{report.Results.Count} open, avg {report.AverageHandshakeMs:F0}ms");
 
-            if (report.AllCriticalOpen)
+            // Stop early ONLY on a preset that opens everything AND is fast (a clearly excellent
+            // result — nothing better to find). If it merely "passes" but is slow/borderline, keep
+            // testing the rest so we settle on the genuinely best strategy, not the first pass.
+            if (report.AllCriticalOpen && report.AverageHandshakeMs < 900)
             {
                 onFraction?.Invoke(1);
-                onProgress($"Выбрана стратегия «{strategy.Name}» — работает всё");
+                onProgress($"Выбрана «{strategy.Name}» — всё открылось, быстро");
                 return new SelectionResult(strategy, baseline, evaluations, DirectAlreadyOpen: false);
             }
         }
