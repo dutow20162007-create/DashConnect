@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <RootNamespace>DashConnect.App</RootNamespace>
+    <AssemblyName>DashConnect</AssemblyName>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <LangVersion>latest</LangVersion>
+    <Product>DashConnect</Product>
+    <Version>1.0.0</Version>
+    <NoWarn>$(NoWarn);CA1416;WFAC010</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\DashConnect.Core\DashConnect.Core.csproj" />
+  </ItemGroup>
+
+  <!-- WinForms + WPF are both enabled (for the tray icon). Drop the WinForms implicit global
+       usings so unqualified Brush/Color/Application resolve to WPF; the two files that need
+       System.Drawing / System.Windows.Forms import them explicitly. -->
+  <ItemGroup>
+    <Using Remove="System.Drawing" />
+    <Using Remove="System.Windows.Forms" />
+  </ItemGroup>
+
+</Project>

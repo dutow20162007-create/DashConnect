@@ -1,0 +1,471 @@
+<Window x:Class="DashConnect.App.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="clr-namespace:DashConnect.App.ViewModels"
+        xmlns:ctl="clr-namespace:DashConnect.App.Controls"
+        Title="Dash Connect"
+        Height="784" Width="452" ResizeMode="CanMinimize"
+        WindowStyle="None" AllowsTransparency="False"
+        WindowStartupLocation="CenterScreen"
+        Background="{StaticResource Bg}"
+        TextOptions.TextFormattingMode="Ideal"
+        FontFamily="Segoe UI">
+
+    <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="B2V"/>
+
+        <Style x:Key="SideButton" TargetType="Button">
+            <Setter Property="Foreground" Value="{StaticResource Muted}"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Width" Value="42"/>
+            <Setter Property="Height" Value="42"/>
+            <Setter Property="Margin" Value="0,0,0,8"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="b" CornerRadius="11" Background="Transparent">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="b" Property="Background" Value="{StaticResource SurfaceAlt}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="CircleButton" TargetType="Button">
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Width" Value="94"/>
+            <Setter Property="Height" Value="94"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Grid>
+                            <Ellipse x:Name="ring" Fill="{StaticResource SurfaceAlt}" Stroke="{StaticResource Border}" StrokeThickness="1"/>
+                            <Ellipse x:Name="core" Width="70" Height="70" Fill="{StaticResource AccentGradient}"/>
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="core" Property="Opacity" Value="0.9"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="core" Property="RenderTransform">
+                                    <Setter.Value><ScaleTransform ScaleX="0.94" ScaleY="0.94" CenterX="47" CenterY="47"/></Setter.Value>
+                                </Setter>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="SegButton" TargetType="Button">
+            <Setter Property="Foreground" Value="{StaticResource Text}"/>
+            <Setter Property="FontSize" Value="12.5"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Height" Value="30"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border CornerRadius="8" Background="{TemplateBinding Background}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+
+    <!-- Root with monochrome particle field behind everything -->
+    <Grid>
+        <ctl:ParticleCanvas x:Name="Particles"/>
+
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="58"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- ============ Sidebar ============ -->
+            <Border Grid.Column="0" Background="{StaticResource Surface}" BorderBrush="{StaticResource Border}" BorderThickness="0,0,1,0">
+                <StackPanel Margin="0,14,0,0" HorizontalAlignment="Center">
+                    <Border Width="34" Height="34" CornerRadius="10" Background="{StaticResource AccentGradient}" Margin="0,0,0,18">
+                        <TextBlock Text="⚡" FontSize="18" Foreground="#FF0A0A0A" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+                    <Button Command="{Binding ShowViewCommand}" CommandParameter="0" ToolTip="Подключение">
+                        <Button.Style>
+                            <Style TargetType="Button" BasedOn="{StaticResource SideButton}">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsConnectView}" Value="True">
+                                        <Setter Property="Foreground" Value="{StaticResource Accent}"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
+                        <TextBlock Text="⤢" FontSize="20"/>
+                    </Button>
+                    <Button Command="{Binding ShowViewCommand}" CommandParameter="1" ToolTip="Настройки">
+                        <Button.Style>
+                            <Style TargetType="Button" BasedOn="{StaticResource SideButton}">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsSettingsView}" Value="True">
+                                        <Setter Property="Foreground" Value="{StaticResource Accent}"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
+                        <TextBlock Text="⚙" FontSize="19"/>
+                    </Button>
+                    <Button Command="{Binding ShowViewCommand}" CommandParameter="2" ToolTip="Журнал">
+                        <Button.Style>
+                            <Style TargetType="Button" BasedOn="{StaticResource SideButton}">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsLogView}" Value="True">
+                                        <Setter Property="Foreground" Value="{StaticResource Accent}"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
+                        <TextBlock Text="🗒" FontSize="17"/>
+                    </Button>
+                </StackPanel>
+            </Border>
+
+            <!-- ============ Content column ============ -->
+            <Grid Grid.Column="1">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="38"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+
+                <!-- Custom title bar (drag + min/close) -->
+                <Grid Grid.Row="0" x:Name="TitleBar" Background="Transparent" MouseLeftButtonDown="TitleBar_MouseDown">
+                    <TextBlock Text="Dash Connect" Foreground="{StaticResource Muted}" FontSize="12" FontWeight="SemiBold"
+                               VerticalAlignment="Center" Margin="14,0,0,0"/>
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,0,6,0">
+                        <Button Style="{StaticResource ChromeButton}" Click="Minimize_Click" Content="—"/>
+                        <Button Style="{StaticResource ChromeButton}" Click="Close_Click" Content="✕"/>
+                    </StackPanel>
+                </Grid>
+
+                <!-- ==== View: Подключение ==== -->
+                <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto"
+                              Visibility="{Binding IsConnectView, Converter={StaticResource B2V}}">
+                    <StackPanel Margin="18,4,18,16">
+                        <TextBlock Text="Время подключения" HorizontalAlignment="Center" Foreground="{StaticResource Muted}" FontSize="13"/>
+                        <TextBlock Text="{Binding ConnectionTime}" HorizontalAlignment="Center" Foreground="{StaticResource Text}"
+                                   FontSize="40" FontWeight="Light" Margin="0,0,0,14"/>
+
+                        <Button Style="{StaticResource CircleButton}" HorizontalAlignment="Center" Command="{Binding ToggleConnectCommand}">
+                            <TextBlock Text="{Binding ConnectButtonGlyph}" FontSize="28" Foreground="#FF0A0A0A"/>
+                        </Button>
+
+                        <Border HorizontalAlignment="Center" Margin="0,14,0,0" CornerRadius="14" Padding="14,6"
+                                Background="{StaticResource SurfaceAlt}" BorderBrush="{StaticResource Border}" BorderThickness="1">
+                            <StackPanel Orientation="Horizontal">
+                                <Ellipse Width="9" Height="9" VerticalAlignment="Center" Fill="{Binding StateBrush}"/>
+                                <TextBlock Text="{Binding StateLabel}" Margin="8,0,0,0" FontSize="13" FontWeight="SemiBold"
+                                           VerticalAlignment="Center" Foreground="{Binding StateBrush}"/>
+                            </StackPanel>
+                        </Border>
+                        <TextBlock Text="{Binding StatusText}" HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap"
+                                   Foreground="{StaticResource Muted}" FontSize="11.5" Margin="0,7,0,0" MinHeight="15"/>
+
+                        <ProgressBar Height="4" Margin="34,10,34,0" Minimum="0" Maximum="1"
+                                     Value="{Binding ProgressValue, Mode=OneWay}"
+                                     Visibility="{Binding IsBusy, Converter={StaticResource B2V}}">
+                            <ProgressBar.Template>
+                                <ControlTemplate TargetType="ProgressBar">
+                                    <Border CornerRadius="2" Background="#FF1E1E1E">
+                                        <Border x:Name="PART_Track" CornerRadius="2">
+                                            <Border x:Name="PART_Indicator" CornerRadius="2" HorizontalAlignment="Left"
+                                                    Background="{StaticResource Accent}"/>
+                                        </Border>
+                                    </Border>
+                                </ControlTemplate>
+                            </ProgressBar.Template>
+                        </ProgressBar>
+
+                        <!-- Modules -->
+                        <Border Style="{StaticResource Card}" Margin="0,16,0,0">
+                            <StackPanel>
+                                <Grid Margin="0,1">
+                                    <StackPanel>
+                                        <TextBlock Text="Обход DPI" Style="{StaticResource Label}"/>
+                                        <TextBlock Text="сайты · Discord · YouTube (бесплатно)" Style="{StaticResource Sub}"/>
+                                    </StackPanel>
+                                    <CheckBox Style="{StaticResource Switch}" HorizontalAlignment="Right"
+                                              IsChecked="{Binding DpiBypassEnabled}" IsEnabled="{Binding CanEditSettings}"/>
+                                </Grid>
+                                <Separator Background="{StaticResource Border}" Margin="0,11"/>
+                                <Grid Margin="0,1">
+                                    <StackPanel>
+                                        <TextBlock Text="Игры (обход DPI)" Style="{StaticResource Label}"/>
+                                        <TextBlock Text="без прокси · родной пинг · Fortnite · DBD" Style="{StaticResource Sub}"/>
+                                    </StackPanel>
+                                    <CheckBox Style="{StaticResource Switch}" HorizontalAlignment="Right"
+                                              IsChecked="{Binding GameDpiEnabled}" IsEnabled="{Binding CanEditSettings}"/>
+                                </Grid>
+                                <Separator Background="{StaticResource Border}" Margin="0,11"/>
+                                <Grid Margin="0,1">
+                                    <StackPanel>
+                                        <TextBlock Text="VPN" Style="{StaticResource Label}"/>
+                                        <TextBlock Text="через ваш сервер · Telegram, игры, всё" Style="{StaticResource Sub}"/>
+                                    </StackPanel>
+                                    <CheckBox Style="{StaticResource Switch}" HorizontalAlignment="Right"
+                                              IsChecked="{Binding VpnEnabled}" IsEnabled="{Binding CanEditSettings}"/>
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- VPN block, shown when VPN enabled -->
+                        <StackPanel Visibility="{Binding VpnEnabled, Converter={StaticResource B2V}}">
+                            <Border Style="{StaticResource Card}" Margin="0,12,0,0" Padding="14">
+                                <StackPanel>
+                                    <Border CornerRadius="9" Background="#FF0A0A0A" Padding="3"
+                                            BorderBrush="{StaticResource Border}" BorderThickness="1">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="*"/>
+                                            </Grid.ColumnDefinitions>
+                                            <Button Grid.Column="0" Content="ПРОКСИ" Style="{StaticResource SegButton}"
+                                                    Background="{Binding ProxyModeBrush}" Command="{Binding SetProxyModeCommand}"/>
+                                            <Button Grid.Column="1" Content="ТУННЕЛЬ" Style="{StaticResource SegButton}"
+                                                    Background="{Binding TunnelModeBrush}" Command="{Binding SetTunnelModeCommand}"/>
+                                        </Grid>
+                                    </Border>
+                                    <Grid Margin="0,10,0,0">
+                                        <TextBlock Text="СЕРВЕРЫ" Style="{StaticResource Sub}" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                        <Button Content="Обновить" Style="{StaticResource GhostButton}" HorizontalAlignment="Right"
+                                                Command="{Binding RefreshSubscriptionCommand}"/>
+                                    </Grid>
+                                    <ListBox ItemsSource="{Binding Profiles}" SelectedItem="{Binding SelectedProfile}"
+                                             Background="Transparent" BorderThickness="0" MaxHeight="130" Margin="0,8,0,0"
+                                             ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                                        <ListBox.ItemContainerStyle>
+                                            <Style TargetType="ListBoxItem">
+                                                <Setter Property="Margin" Value="0,0,0,6"/>
+                                                <Setter Property="Template">
+                                                    <Setter.Value>
+                                                        <ControlTemplate TargetType="ListBoxItem">
+                                                            <Border x:Name="b" CornerRadius="9" Padding="12,9"
+                                                                    Background="{StaticResource SurfaceAlt}"
+                                                                    BorderBrush="{StaticResource Border}" BorderThickness="1">
+                                                                <ContentPresenter/>
+                                                            </Border>
+                                                            <ControlTemplate.Triggers>
+                                                                <Trigger Property="IsSelected" Value="True">
+                                                                    <Setter TargetName="b" Property="BorderBrush" Value="{StaticResource Accent}"/>
+                                                                    <Setter TargetName="b" Property="BorderThickness" Value="1.5"/>
+                                                                </Trigger>
+                                                            </ControlTemplate.Triggers>
+                                                        </ControlTemplate>
+                                                    </Setter.Value>
+                                                </Setter>
+                                            </Style>
+                                        </ListBox.ItemContainerStyle>
+                                        <ListBox.ItemTemplate>
+                                            <DataTemplate>
+                                                <StackPanel>
+                                                    <TextBlock Text="{Binding Name}" Foreground="{StaticResource Text}" FontSize="13" FontWeight="SemiBold"/>
+                                                    <TextBlock Text="{Binding Protocol}" Foreground="{StaticResource Muted}" FontSize="11"/>
+                                                </StackPanel>
+                                            </DataTemplate>
+                                        </ListBox.ItemTemplate>
+                                    </ListBox>
+                                    <TextBlock Text="Список пуст — вставьте подписку в Настройках." Style="{StaticResource Sub}"
+                                               TextWrapping="Wrap" Margin="2,2,0,0"/>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+
+                        <!-- Diagnostics -->
+                        <Border Style="{StaticResource Card}" Margin="0,12,0,0" Padding="14">
+                            <StackPanel>
+                                <Grid>
+                                    <TextBlock Text="ДОСТУПНОСТЬ" Style="{StaticResource Sub}" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                    <Button Content="Проверить" Style="{StaticResource GhostButton}" HorizontalAlignment="Right"
+                                            Command="{Binding RunDiagnosticsCommand}"/>
+                                </Grid>
+                                <ItemsControl ItemsSource="{Binding Diagnostics}" Margin="0,10,0,0">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate DataType="{x:Type vm:HostChipViewModel}">
+                                            <Border CornerRadius="9" Background="{StaticResource SurfaceAlt}"
+                                                    BorderBrush="{StaticResource Border}" BorderThickness="1"
+                                                    Padding="10,6" Margin="0,0,7,7" MinWidth="112">
+                                                <StackPanel Orientation="Horizontal">
+                                                    <TextBlock Text="{Binding Glyph}" Foreground="{Binding VerdictBrush}"
+                                                               FontSize="13" FontWeight="Bold" VerticalAlignment="Center"/>
+                                                    <StackPanel Margin="7,0,0,0">
+                                                        <TextBlock Text="{Binding Label}" Foreground="{StaticResource Text}" FontSize="12" FontWeight="SemiBold"/>
+                                                        <StackPanel Orientation="Horizontal">
+                                                            <TextBlock Text="{Binding VerdictText}" FontSize="10.5" Foreground="{Binding VerdictBrush}"/>
+                                                            <TextBlock Text="{Binding LatencyText}" Style="{StaticResource Sub}" Margin="6,0,0,0"/>
+                                                        </StackPanel>
+                                                    </StackPanel>
+                                                </StackPanel>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                                <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                                    <TextBlock Text="Стратегия:" Style="{StaticResource Sub}"/>
+                                    <TextBlock Text="{Binding ActiveStrategyName}" Margin="6,0,0,0" FontSize="12"
+                                               FontWeight="SemiBold" Foreground="{StaticResource Text}"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+
+                <!-- ==== View: Настройки ==== -->
+                <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto"
+                              Visibility="{Binding IsSettingsView, Converter={StaticResource B2V}}">
+                    <StackPanel Margin="18,4,18,16">
+                        <TextBlock Text="Настройки" Style="{StaticResource H1}" Margin="0,0,0,12"/>
+                        <Border Style="{StaticResource Card}">
+                            <StackPanel>
+                                <TextBlock Text="Подписка (ссылка или vless://ss://vmess://trojan://)" Style="{StaticResource Sub}"/>
+                                <Grid Margin="0,4,0,12">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBox Grid.Column="0" Style="{StaticResource Input}"
+                                             Text="{Binding SubscriptionUrl, UpdateSourceTrigger=PropertyChanged}"/>
+                                    <Button Grid.Column="1" Content="Загрузить" Style="{StaticResource GhostButton}"
+                                            Margin="8,0,0,0" Command="{Binding RefreshSubscriptionCommand}"/>
+                                </Grid>
+
+                                <TextBlock Text="Папка Zapret" Style="{StaticResource Sub}"/>
+                                <TextBox Style="{StaticResource Input}" Margin="0,4,0,12"
+                                         Text="{Binding ZapretRoot, UpdateSourceTrigger=PropertyChanged}"
+                                         IsEnabled="{Binding CanEditSettings}"/>
+
+                                <TextBlock Text="Стратегия (пресет Zapret)" Style="{StaticResource Sub}" Margin="0,2,0,4"/>
+                                <Border CornerRadius="9" Background="#FF0A0A0A" BorderBrush="{StaticResource Border}"
+                                        BorderThickness="1" Padding="4">
+                                    <ListBox ItemsSource="{Binding Presets}" SelectedItem="{Binding SelectedPreset}"
+                                             Background="Transparent" BorderThickness="0" MaxHeight="132"
+                                             Foreground="{StaticResource Text}" FontSize="12.5"
+                                             ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                                        <ListBox.ItemContainerStyle>
+                                            <Style TargetType="ListBoxItem">
+                                                <Setter Property="Padding" Value="8,5"/>
+                                                <Setter Property="Foreground" Value="{StaticResource Text}"/>
+                                                <Setter Property="Template">
+                                                    <Setter.Value>
+                                                        <ControlTemplate TargetType="ListBoxItem">
+                                                            <Border x:Name="b" CornerRadius="7" Padding="8,5" Background="Transparent">
+                                                                <ContentPresenter/>
+                                                            </Border>
+                                                            <ControlTemplate.Triggers>
+                                                                <Trigger Property="IsMouseOver" Value="True">
+                                                                    <Setter TargetName="b" Property="Background" Value="{StaticResource SurfaceAlt}"/>
+                                                                </Trigger>
+                                                                <Trigger Property="IsSelected" Value="True">
+                                                                    <Setter TargetName="b" Property="Background" Value="#FF333333"/>
+                                                                </Trigger>
+                                                            </ControlTemplate.Triggers>
+                                                        </ControlTemplate>
+                                                    </Setter.Value>
+                                                </Setter>
+                                            </Style>
+                                        </ListBox.ItemContainerStyle>
+                                    </ListBox>
+                                </Border>
+                                <TextBlock Text="Пусто = «general» по умолчанию. Не работает — выбери другой пресет."
+                                           Style="{StaticResource Sub}" TextWrapping="Wrap" Margin="0,4,0,10"/>
+
+                                <Grid Margin="0,2">
+                                    <StackPanel>
+                                        <TextBlock Text="Автоподбор (все пресеты)" Style="{StaticResource Label}"/>
+                                        <TextBlock Text="перебирает все по очереди, берёт рабочий" Style="{StaticResource Sub}"/>
+                                    </StackPanel>
+                                    <CheckBox Style="{StaticResource Switch}" HorizontalAlignment="Right"
+                                              IsChecked="{Binding AutoSelect}" IsEnabled="{Binding CanEditSettings}"/>
+                                </Grid>
+                                <Grid Margin="0,12,0,0">
+                                    <TextBlock Text="Сворачивать в трей при закрытии" Style="{StaticResource Label}" VerticalAlignment="Center"/>
+                                    <CheckBox Style="{StaticResource Switch}" HorizontalAlignment="Right"
+                                              IsChecked="{Binding MinimizeToTrayOnClose}"/>
+                                </Grid>
+
+                                <TextBlock Text="Рабочие настройки" Style="{StaticResource Sub}" Margin="0,16,0,4"/>
+                                <StackPanel Orientation="Horizontal">
+                                    <Button Content="Сохранить рабочие" Style="{StaticResource GhostButton}"
+                                            Command="{Binding PinSettingsCommand}"/>
+                                    <Button Content="Сканировать заново" Style="{StaticResource GhostButton}"
+                                            Margin="8,0,0,0" Command="{Binding ClearPinCommand}"/>
+                                </StackPanel>
+                                <TextBlock Text="{Binding PinnedInfo}" Style="{StaticResource Sub}" TextWrapping="Wrap" Margin="2,6,0,0"/>
+
+                                <TextBlock Text="Добавить заблокированный домен" Style="{StaticResource Sub}" Margin="0,14,0,4"/>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBox Grid.Column="0" Style="{StaticResource Input}"
+                                             Text="{Binding NewDomainInput, UpdateSourceTrigger=PropertyChanged}"/>
+                                    <Button Grid.Column="1" Content="Добавить" Style="{StaticResource GhostButton}"
+                                            Margin="8,0,0,0" Command="{Binding AddDomainCommand}"/>
+                                </Grid>
+
+                                <StackPanel Orientation="Horizontal" Margin="0,14,0,0">
+                                    <Button Content="Папка Zapret ▸" Style="{StaticResource GhostButton}" Command="{Binding OpenZapretFolderCommand}"/>
+                                    <Button Content="Данные ▸" Style="{StaticResource GhostButton}" Margin="8,0,0,0" Command="{Binding OpenDataFolderCommand}"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+
+                <!-- ==== View: Журнал ==== -->
+                <Grid Grid.Row="1" Margin="18,4,18,16"
+                      Visibility="{Binding IsLogView, Converter={StaticResource B2V}}">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+                    <Grid Grid.Row="0" Margin="0,0,0,10">
+                        <TextBlock Text="Журнал" Style="{StaticResource H1}" VerticalAlignment="Center"/>
+                        <Button Content="Очистить" Style="{StaticResource GhostButton}" HorizontalAlignment="Right"
+                                Command="{Binding ClearLogCommand}"/>
+                    </Grid>
+                    <Border Grid.Row="1" CornerRadius="12" Background="{StaticResource Surface}"
+                            BorderBrush="{StaticResource Border}" BorderThickness="1">
+                        <ListBox x:Name="LogList" ItemsSource="{Binding LogLines}"
+                                 Background="Transparent" BorderThickness="0" Foreground="{StaticResource Muted}"
+                                 ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                 FontFamily="Consolas, Cascadia Mono, monospace" FontSize="11.5" Padding="8">
+                            <ListBox.ItemContainerStyle>
+                                <Style TargetType="ListBoxItem">
+                                    <Setter Property="Background" Value="Transparent"/>
+                                    <Setter Property="Padding" Value="2,1"/>
+                                    <Setter Property="Template">
+                                        <Setter.Value>
+                                            <ControlTemplate TargetType="ListBoxItem"><ContentPresenter/></ControlTemplate>
+                                        </Setter.Value>
+                                    </Setter>
+                                </Style>
+                            </ListBox.ItemContainerStyle>
+                            <ListBox.ItemTemplate>
+                                <DataTemplate><TextBlock Text="{Binding}" TextWrapping="Wrap"/></DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                    </Border>
+                </Grid>
+            </Grid>
+        </Grid>
+    </Grid>
+</Window>

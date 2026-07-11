@@ -1,0 +1,19 @@
+# Build output (scoped to source projects so zapret/bin ships in the repo)
+src/**/bin/
+src/**/obj/
+dist/
+*.user
+
+# IDE
+.vs/
+.idea/
+
+# App runtime data (kept in %AppData%, never in repo)
+*.log
+
+# WiX installer intermediates
+*.wixpdb
+*.wixobj
+
+# Session / local notes
+.remember/
