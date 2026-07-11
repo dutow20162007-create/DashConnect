@@ -94,9 +94,24 @@
             <!-- ============ Sidebar ============ -->
             <Border Grid.Column="0" Background="{StaticResource Surface}" BorderBrush="{StaticResource Border}" BorderThickness="0,0,1,0">
                 <StackPanel Margin="0,14,0,0" HorizontalAlignment="Center">
-                    <Border Width="34" Height="34" CornerRadius="10" Background="{StaticResource AccentGradient}" Margin="0,0,0,18">
-                        <TextBlock Text="⚡" FontSize="18" Foreground="#FF0A0A0A" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                    </Border>
+                    <!-- Brand logo — clickable button that returns to the main (Подключение) view. -->
+                    <Button Command="{Binding ShowViewCommand}" CommandParameter="0"
+                            ToolTip="Dash Connect — на главную" Cursor="Hand"
+                            Width="40" Height="40" Margin="0,0,0,16">
+                        <Button.Template>
+                            <ControlTemplate TargetType="Button">
+                                <Border x:Name="b" CornerRadius="12" Background="Transparent" Padding="2">
+                                    <Image Source="/Assets/app-256.png"
+                                           RenderOptions.BitmapScalingMode="HighQuality"/>
+                                </Border>
+                                <ControlTemplate.Triggers>
+                                    <Trigger Property="IsMouseOver" Value="True">
+                                        <Setter TargetName="b" Property="Background" Value="{StaticResource SurfaceAlt}"/>
+                                    </Trigger>
+                                </ControlTemplate.Triggers>
+                            </ControlTemplate>
+                        </Button.Template>
+                    </Button>
                     <Button Command="{Binding ShowViewCommand}" CommandParameter="0" ToolTip="Подключение">
                         <Button.Style>
                             <Style TargetType="Button" BasedOn="{StaticResource SideButton}">
