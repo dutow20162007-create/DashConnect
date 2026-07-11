@@ -44,9 +44,20 @@ public partial class App : Application
 
         if (!AdminGuard.IsElevated())
         {
-            MessageBox.Show(
-                "Dash Connect нужно запускать от имени администратора.\n\nWinDivert (обход DPI) и TUN-адаптер (игровой роутинг) требуют повышенных прав.",
-                "Нужны права администратора", MessageBoxButton.OK, MessageBoxImage.Warning);
+            // The manifest already forces elevation, but if we ever start unelevated (manifest
+            // stripped, launched via an odd host) relaunch OURSELVES elevated through UAC and exit —
+            // so the app always ends up running as administrator without the user doing anything.
+            try
+            {
+                var exe = Environment.ProcessPath;
+                if (!string.IsNullOrEmpty(exe))
+                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(exe)
+                    {
+                        UseShellExecute = true,
+                        Verb = "runas",
+                    });
+            }
+            catch { /* user dismissed the UAC prompt — nothing to do but exit */ }
             Shutdown();
             return;
         }
