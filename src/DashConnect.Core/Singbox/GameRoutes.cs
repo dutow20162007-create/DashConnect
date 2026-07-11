@@ -117,4 +117,35 @@ public static class GameRoutesStore
             Log.Warn("routes", $"save failed: {ex.Message}");
         }
     }
+
+    // ---- User-managed per-app VPN routing ----
+    // The Settings UI edits a dedicated route holding the executables the user wants sent through
+    // the VPN. Its process names are picked up by the sing-box smart (ПРОКСИ) route like any game.
+    public const string UserAppsRouteName = "Мои программы";
+
+    /// <summary>Process names the user chose to route through the VPN.</summary>
+    public static List<string> LoadUserApps()
+    {
+        var route = Load().Games.FirstOrDefault(g => g.Name == UserAppsRouteName);
+        return route?.ProcessNames.ToList() ?? new List<string>();
+    }
+
+    /// <summary>Persist the user's per-app VPN routing list (creates the route if missing).</summary>
+    public static void SaveUserApps(IEnumerable<string> processNames)
+    {
+        var set = Load();
+        var route = set.Games.FirstOrDefault(g => g.Name == UserAppsRouteName);
+        if (route is null)
+        {
+            route = new GameRoute { Name = UserAppsRouteName };
+            set.Games.Add(route);
+        }
+        route.ProcessNames = processNames
+            .Select(p => p.Trim())
+            .Where(p => p.Length > 0)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        route.Enabled = true;
+        Save(set);
+    }
 }

@@ -424,6 +424,41 @@
                                             Margin="8,0,0,0" Command="{Binding AddDomainCommand}"/>
                                 </Grid>
 
+                                <!-- VPN: маршрутизация по программам -->
+                                <TextBlock Text="VPN только для этих программ" Style="{StaticResource Sub}"
+                                           FontWeight="SemiBold" Margin="0,16,0,2"/>
+                                <TextBlock Text="в режиме ПРОКСИ через VPN пойдут только эти программы (плюс игры). Остальное — напрямую."
+                                           Style="{StaticResource Sub}" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,7"/>
+                                <ItemsControl ItemsSource="{Binding VpnApps}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Border CornerRadius="8" Background="{StaticResource SurfaceAlt}"
+                                                    BorderBrush="{StaticResource Border}" BorderThickness="1"
+                                                    Padding="10,3,4,3" Margin="0,0,0,5">
+                                                <Grid>
+                                                    <TextBlock Text="{Binding}" Foreground="{StaticResource Text}"
+                                                               FontSize="12.5" VerticalAlignment="Center"/>
+                                                    <Button Content="✕" HorizontalAlignment="Right" Style="{StaticResource ChromeButton}"
+                                                            Command="{Binding DataContext.RemoveVpnAppCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                            CommandParameter="{Binding}"/>
+                                                </Grid>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                                <Grid Margin="0,2,0,0">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBox Grid.Column="0" Style="{StaticResource Input}"
+                                             Text="{Binding NewAppInput, UpdateSourceTrigger=PropertyChanged}"/>
+                                    <Button Grid.Column="1" Content="Добавить" Style="{StaticResource GhostButton}"
+                                            Margin="8,0,0,0" Command="{Binding AddVpnAppCommand}"/>
+                                </Grid>
+                                <TextBlock Text="напр. Discord.exe, chrome.exe, Telegram.exe (.exe добавится сам)"
+                                           Style="{StaticResource Sub}" FontSize="11" TextWrapping="Wrap" Margin="2,4,0,0"/>
+
                                 <StackPanel Orientation="Horizontal" Margin="0,14,0,0">
                                     <Button Content="Папка Zapret ▸" Style="{StaticResource GhostButton}" Command="{Binding OpenZapretFolderCommand}"/>
                                     <Button Content="Данные ▸" Style="{StaticResource GhostButton}" Margin="8,0,0,0" Command="{Binding OpenDataFolderCommand}"/>

@@ -30,6 +30,7 @@ public sealed class MainViewModel : ViewModelBase
     private EngineState _state = EngineState.Stopped;
     private string _activeStrategyName = "—";
     private string _newDomainInput = "";
+    private string _newAppInput = "";
     private DateTime? _connectedAt;
     private string _connectionTime = "00:00:00";
     private int _activeView;
@@ -51,10 +52,15 @@ public sealed class MainViewModel : ViewModelBase
         _selectedProfile = Profiles.FirstOrDefault(p => p.Name == _config.SelectedProfileName)
                            ?? Profiles.FirstOrDefault();
 
+        try { foreach (var a in GameRoutesStore.LoadUserApps()) VpnApps.Add(a); }
+        catch { /* first run — empty list */ }
+
         ToggleConnectCommand = new RelayCommand(ToggleConnect);
         RunDiagnosticsCommand = new AsyncRelayCommand(RunDiagnosticsAsync, () => !IsBusy);
         RefreshSubscriptionCommand = new AsyncRelayCommand(RefreshSubscriptionAsync, () => !IsBusy);
         AddDomainCommand = new RelayCommand(AddDomain, () => !string.IsNullOrWhiteSpace(NewDomainInput));
+        AddVpnAppCommand = new RelayCommand(AddVpnApp, () => !string.IsNullOrWhiteSpace(NewAppInput));
+        RemoveVpnAppCommand = new RelayCommand(RemoveVpnApp);
         OpenDataFolderCommand = new RelayCommand(() => OpenPath(Paths.AppDataDir));
         OpenZapretFolderCommand = new RelayCommand(() => OpenPath(_config.ZapretRoot));
         ClearLogCommand = new RelayCommand(() => LogLines.Clear());
@@ -80,6 +86,8 @@ public sealed class MainViewModel : ViewModelBase
     public ICommand RunDiagnosticsCommand { get; }
     public ICommand RefreshSubscriptionCommand { get; }
     public ICommand AddDomainCommand { get; }
+    public ICommand AddVpnAppCommand { get; }
+    public ICommand RemoveVpnAppCommand { get; }
     public ICommand OpenDataFolderCommand { get; }
     public ICommand OpenZapretFolderCommand { get; }
     public ICommand ClearLogCommand { get; }
@@ -97,6 +105,7 @@ public sealed class MainViewModel : ViewModelBase
     public ObservableCollection<HostChipViewModel> Diagnostics { get; } = new();
     public ObservableCollection<string> LogLines { get; } = new();
     public ObservableCollection<SingboxProfile> Profiles { get; } = new();
+    public ObservableCollection<string> VpnApps { get; } = new();
 
     // ---- Navigation (0 = Подключение, 1 = Настройки, 2 = Журнал) ----
     public int ActiveView
@@ -273,6 +282,12 @@ public sealed class MainViewModel : ViewModelBase
         set { if (Set(ref _newDomainInput, value)) CommandManager.InvalidateRequerySuggested(); }
     }
 
+    public string NewAppInput
+    {
+        get => _newAppInput;
+        set { if (Set(ref _newAppInput, value)) CommandManager.InvalidateRequerySuggested(); }
+    }
+
     // ---- Command handlers ----
     private void ToggleConnect()
     {
@@ -334,6 +349,29 @@ public sealed class MainViewModel : ViewModelBase
             ? $"Добавлено «{domain}» — переподключитесь, чтобы применить"
             : $"«{domain}» уже есть в списке";
         NewDomainInput = "";
+    }
+
+    private void AddVpnApp()
+    {
+        var app = NewAppInput.Trim();
+        if (app.Length == 0) return;
+        if (!app.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)) app += ".exe";
+        if (!VpnApps.Any(a => a.Equals(app, StringComparison.OrdinalIgnoreCase)))
+        {
+            VpnApps.Add(app);
+            GameRoutesStore.SaveUserApps(VpnApps);
+            StatusText = $"«{app}» добавлена в VPN — переподключитесь, чтобы применить";
+        }
+        NewAppInput = "";
+    }
+
+    private void RemoveVpnApp(object? app)
+    {
+        if (app is string s && VpnApps.Remove(s))
+        {
+            GameRoutesStore.SaveUserApps(VpnApps);
+            StatusText = $"«{s}» убрана из VPN — переподключитесь, чтобы применить";
+        }
     }
 
     private static void OpenPath(string path)
