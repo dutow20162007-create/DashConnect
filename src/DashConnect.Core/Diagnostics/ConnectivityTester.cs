@@ -45,18 +45,35 @@ public sealed class ConnectivityTester
     };
 
     public async Task<DiagnosticsReport> RunAsync(
-        IReadOnlyList<ProbeTarget> targets, CancellationToken ct = default)
+        IReadOnlyList<ProbeTarget> targets, CancellationToken ct = default, bool retryOnFail = false)
     {
-        var tasks = targets.Select(t => ProbeGuardedAsync(t, ct)).ToArray();
+        var tasks = targets.Select(t => ProbeGuardedAsync(t, ct, retryOnFail)).ToArray();
         var results = await Task.WhenAll(tasks);
         return new DiagnosticsReport { Results = results };
     }
 
+    /// <summary>Probe a target; optionally retry once on failure to avoid a false "no connection".</summary>
+    private async Task<HostProbeResult> ProbeGuardedAsync(ProbeTarget target, CancellationToken ct, bool retryOnFail)
+    {
+        var result = await ProbeOnceAsync(target, ct);
+        // A single fresh probe can transiently fail (winws mid-reset, a slow first SYN, one dropped
+        // packet) and mis-report "no connection". For the user-facing availability report, retry once
+        // and keep the better outcome so a working service never shows as unreachable.
+        if (retryOnFail && result.Verdict is ServiceVerdict.Unreachable or ServiceVerdict.Blocked)
+        {
+            try { await Task.Delay(300, ct); } catch { }
+            var retry = await ProbeOnceAsync(target, ct);
+            if (retry.Verdict is ServiceVerdict.Open or ServiceVerdict.Throttled)
+                return retry;
+        }
+        return result;
+    }
+
     /// <summary>Hard overall cap per target so one stuck probe can never hang the whole report.</summary>
-    private async Task<HostProbeResult> ProbeGuardedAsync(ProbeTarget target, CancellationToken ct)
+    private async Task<HostProbeResult> ProbeOnceAsync(ProbeTarget target, CancellationToken ct)
     {
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        cts.CancelAfter(TimeSpan.FromSeconds(4));
+        cts.CancelAfter(TimeSpan.FromSeconds(5));
         try
         {
             return await ProbeAsync(target, cts.Token);
@@ -72,7 +89,7 @@ public sealed class ConnectivityTester
     }
 
     public Task<DiagnosticsReport> RunDefaultAsync(CancellationToken ct = default)
-        => RunAsync(DefaultTargets, ct);
+        => RunAsync(DefaultTargets, ct, retryOnFail: true);
 
     /// <summary>Fast, critical-only probe used during strategy selection.</summary>
     public Task<DiagnosticsReport> RunSelectionAsync(CancellationToken ct = default)
