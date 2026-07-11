@@ -112,18 +112,6 @@
                             </ControlTemplate>
                         </Button.Template>
                     </Button>
-                    <Button Command="{Binding ShowViewCommand}" CommandParameter="0" ToolTip="Подключение">
-                        <Button.Style>
-                            <Style TargetType="Button" BasedOn="{StaticResource SideButton}">
-                                <Style.Triggers>
-                                    <DataTrigger Binding="{Binding IsConnectView}" Value="True">
-                                        <Setter Property="Foreground" Value="{StaticResource Accent}"/>
-                                    </DataTrigger>
-                                </Style.Triggers>
-                            </Style>
-                        </Button.Style>
-                        <TextBlock Text="⤢" FontSize="20"/>
-                    </Button>
                     <Button Command="{Binding ShowViewCommand}" CommandParameter="1" ToolTip="Настройки">
                         <Button.Style>
                             <Style TargetType="Button" BasedOn="{StaticResource SideButton}">
