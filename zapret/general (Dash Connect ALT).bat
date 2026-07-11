@@ -13,8 +13,9 @@ set "BIN=%~dp0bin\"
 set "LISTS=%~dp0lists\"
 cd /d %BIN%
 
-start "zapret: %~n0" /min "%BIN%winws.exe" --wf-tcp=80,443,2053,2083,2087,2096,8443,5222,%GameFilterTCP% --wf-udp=443,19294-19344,50000-50100,%GameFilterUDP% ^
---filter-tcp=443,5222 --ipset="%LISTS%ipset-telegram.txt" --dpi-desync=fake,split2 --dpi-desync-split-pos=2 --dpi-desync-fooling=badseq --new ^
+start "zapret: %~n0" /min "%BIN%winws.exe" --wf-l3=ipv4,ipv6 --wf-tcp=80,443,2053,2083,2087,2096,8443,5222,%GameFilterTCP% --wf-udp=443,19294-19344,50000-50100,%GameFilterUDP% ^
+--filter-tcp=80,443,5222 --ipset="%LISTS%ipset-telegram.txt" --dpi-desync=fake,multisplit --dpi-desync-any-protocol=1 --dpi-desync-split-pos=1,2,64 --dpi-desync-fooling=md5sig,badseq --dpi-desync-fake-unknown=0x00000000 --dpi-desync-repeats=6 --dpi-desync-cutoff=n3 --new ^
+--filter-l3=ipv6 --filter-tcp=80,443,5222 --ipset="%LISTS%ipset-telegram6.txt" --dpi-desync=fake,multisplit --dpi-desync-any-protocol=1 --dpi-desync-split-pos=1,2,64 --dpi-desync-fooling=badseq --dpi-desync-cutoff=n3 --new ^
 --filter-tcp=5222 --dpi-desync=split2 --dpi-desync-split-pos=1 --new ^
 --filter-tcp=443 --hostlist="%LISTS%list-gameservers.txt" --dpi-desync=split2 --dpi-desync-split-pos=1,midsld --new ^
 --filter-udp=443 --hostlist="%LISTS%list-general.txt" --hostlist="%LISTS%list-general-user.txt" --hostlist-exclude="%LISTS%list-exclude.txt" --hostlist-exclude="%LISTS%list-exclude-user.txt" --ipset-exclude="%LISTS%ipset-exclude.txt" --ipset-exclude="%LISTS%ipset-exclude-user.txt" --dpi-desync=fake --dpi-desync-repeats=6 --dpi-desync-fake-quic="%BIN%quic_initial_www_google_com.bin" --new ^
