@@ -117,32 +117,14 @@ public partial class App : Application
         _ = CheckForUpdatesAsync();
     }
 
-    /// <summary>Silently checks GitHub for a newer release; offers a one-click update if found.</summary>
+    /// <summary>Silently checks GitHub for a newer release; shows the dash-os update card if found.</summary>
     private async Task CheckForUpdatesAsync()
     {
         try
         {
             var info = await UpdateChecker.CheckAsync();
-            if (info is null) return;
-
-            var prompt = $"Доступна новая версия Dash Connect {info.Version}.\n\n" +
-                         (string.IsNullOrWhiteSpace(info.Notes) ? "" : info.Notes.Trim() + "\n\n") +
-                         "Скачать и установить сейчас?";
-            if (MessageBox.Show(prompt, "Доступно обновление",
-                    MessageBoxButton.YesNo, MessageBoxImage.Information) != MessageBoxResult.Yes)
-                return;
-
-            var file = await UpdateChecker.DownloadAsync(info.DownloadUrl);
-            if (file is null || !file.EndsWith(".msi", StringComparison.OrdinalIgnoreCase))
-            {
-                // Couldn't fetch the MSI directly — open the releases page instead.
-                try { Process.Start(new ProcessStartInfo(UpdateChecker.ReleasesPage) { UseShellExecute = true }); } catch { }
-                return;
-            }
-
-            // Launch the installer (it will replace files) and quit so they aren't locked.
-            Process.Start(new ProcessStartInfo("msiexec", $"/i \"{file}\"") { UseShellExecute = true });
-            ExitApp();
+            if (info is null || _window is null) return;
+            new UpdateWindow(info) { Owner = _window }.Show();
         }
         catch (Exception ex) { Log.Debug("update", $"update flow: {ex.Message}"); }
     }

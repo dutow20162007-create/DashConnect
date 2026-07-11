@@ -15,7 +15,7 @@ namespace DashConnect.Core.Diagnostics;
 /// succeeds while the ClientHello is reset or times out is the classic censorship fingerprint.
 ///
 /// Two probe sets are exposed:
-///   * DefaultTargets   — full verification (Discord + gateway WS, Telegram, YouTube + CDN)
+///   * DefaultTargets   — full verification (Discord + gateway WS, YouTube + CDN)
 ///   * SelectionTargets — fast TLS-only critical probes used while trialing Zapret strategies
 /// </summary>
 public sealed class ConnectivityTester
@@ -32,7 +32,6 @@ public sealed class ConnectivityTester
         new() { Label = "Discord",         Host = "discord.com",                Https = true,  Critical = true },
         new() { Label = "Discord (шлюз)",  Host = "gateway.discord.gg",         WebSocket = true,
                 WebSocketPath = "/?v=10&encoding=json", Https = false, Critical = true },
-        new() { Label = "Telegram",        Host = "web.telegram.org",           Https = true,  Critical = true },
         new() { Label = "YouTube",         Host = "www.youtube.com",            Https = true,  Critical = true },
         new() { Label = "YouTube CDN",     Host = "redirector.googlevideo.com", Https = true,  Critical = false },
     };
@@ -41,7 +40,6 @@ public sealed class ConnectivityTester
     public static IReadOnlyList<ProbeTarget> SelectionTargets { get; } = new List<ProbeTarget>
     {
         new() { Label = "Discord",        Host = "discord.com",        Https = false, Critical = true },
-        new() { Label = "Telegram",       Host = "web.telegram.org",   Https = false, Critical = true },
         new() { Label = "YouTube",        Host = "www.youtube.com",    Https = false, Critical = true },
         new() { Label = "Discord (шлюз)", Host = "gateway.discord.gg", Https = false, Critical = true },
     };
