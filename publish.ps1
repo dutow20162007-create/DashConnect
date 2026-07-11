@@ -93,5 +93,7 @@ if ($exists) {
     gh release create $tag $msi (Join-Path $root 'dist\DashConnect.exe') --title "Dash Connect $cur" --notes "Build $cur."
     Write-Host "[publish] created release $tag" -ForegroundColor Green
 }
+# Safety: flaky GitHub uploads can leave the release as a draft — force it published.
+gh release edit $tag --draft=false 2>$null
 
 Write-Host "[publish] DONE -> https://github.com/dutow20162007-create/DashConnect/releases/tag/$tag" -ForegroundColor Green

@@ -66,15 +66,38 @@ public static class DnsManager
             }
             await FlushAsync(ct);
 
-            // Verify it actually took — surface a clear result instead of assuming success.
+            // Verify it took AND that it actually resolves. Some RU ISPs block Cloudflare / DoH — that
+            // would leave the machine with DEAD DNS: existing connections keep working (voice chat), but
+            // every new connection (page loads, downloads, our probe) stalls. If it doesn't resolve,
+            // roll straight back to the user's original DNS so we never break their internet.
             await Task.Delay(150, ct);
-            bool ok = IsCloudflareActive(adapters);
-            Log.Info("dns", ok
-                ? $"зашифрованный DNS активен (Cloudflare DoH) на {adapters.Count} адаптер(ах): {V4[0]}"
-                : "DNS применён, но 1.1.1.1 не подтвердился (возможно активен сторонний VPN-адаптер)");
-            return ok;
+            bool set = IsCloudflareActive(adapters);
+            bool resolves = await DnsResolvesAsync("www.google.com", ct);
+            if (set && !resolves)
+            {
+                Log.Warn("dns", "Cloudflare DNS не резолвит (провайдер блокирует 1.1.1.1?) — возвращаю исходный DNS");
+                await RevertAsync(ct);
+                return false;
+            }
+            Log.Info("dns", set && resolves
+                ? $"зашифрованный DNS активен и резолвит (Cloudflare DoH), адаптеров: {adapters.Count}"
+                : "DNS применён, но проверка не подтвердилась");
+            return set && resolves;
         }
         catch (Exception ex) { Log.Warn("dns", $"не удалось включить чистый DNS: {ex.Message}"); return false; }
+    }
+
+    /// <summary>Confirms DNS actually resolves through the current resolver (short timeout).</summary>
+    private static async Task<bool> DnsResolvesAsync(string host, CancellationToken ct)
+    {
+        try
+        {
+            using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            cts.CancelAfter(TimeSpan.FromSeconds(4));
+            var addrs = await System.Net.Dns.GetHostAddressesAsync(host, cts.Token);
+            return addrs.Length > 0;
+        }
+        catch { return false; }
     }
 
     /// <summary>True if any target adapter now resolves through Cloudflare (live check).</summary>
