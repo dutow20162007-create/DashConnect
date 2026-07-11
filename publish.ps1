@@ -33,7 +33,9 @@ function Set-FileText([string]$path, [string]$text) { [IO.File]::WriteAllText($p
 # 1. Optional version bump (single source of truth: UpdateChecker.CurrentVersion + MSI version).
 if ($Version) {
     Set-FileText $ucPath  (([IO.File]::ReadAllText($ucPath))  -replace 'CurrentVersion = "[\d\.]+"', ('CurrentVersion = "{0}"' -f $Version))
-    Set-FileText $wxsPath (([IO.File]::ReadAllText($wxsPath)) -replace 'Version="[\d\.]+"', ('Version="{0}.0"' -f $Version))
+    # -creplace (case-sensitive): match only the Package `Version="..."`, NOT the lowercase
+    # `<?xml version="1.0"?>` declaration on line 1.
+    Set-FileText $wxsPath (([IO.File]::ReadAllText($wxsPath)) -creplace 'Version="[\d\.]+"', ('Version="{0}.0"' -f $Version))
     Write-Host "[publish] version -> $Version" -ForegroundColor Cyan
 }
 
