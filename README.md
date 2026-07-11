@@ -71,7 +71,7 @@ Dash Connect не изобретает флаги — он **разбирает 
 - **Игры** (Fortnite / Apex / DBD / FACEIT) — игровые серверы используют **порт 5222** и чувствительны к fake-пакетам, поэтому для порта 5222 и доменов игровых сервисов (`lists/list-gameservers.txt`) используется **чистый `split`**. Сами игры идут напрямую — родной пинг.
 - **Само находит остальное** — `--hostlist-auto`: winws следит за соединениями и сам добавляет в обход любой домен, который блокируется (порог: 3 сбоя за минуту).
 
-**Автоподбор:** `StrategySelector` пробует пресеты по очереди, проверяя доступность Discord/YouTube/Telegram, и останавливается на первом рабочем (ранний выход). `ZapretManager` держит процесс и подчищает `winws.exe` + службу WinDivert при остановке.
+**Автоподбор:** `StrategySelector` пробует пресеты по очереди, проверяя доступность Discord/YouTube, и останавливается на первом рабочем (ранний выход). `ZapretManager` держит процесс и подчищает `winws.exe` + службу WinDivert при остановке.
 
 ### 2. Шифрованный DNS (DoH) — против DNS-подмены
 
@@ -90,7 +90,7 @@ Dash Connect не изобретает флаги — он **разбирает 
 Dash Connect — это удобная GUI-обёртка и автоматизация поверх чужих открытых проектов. Вся заслуга по самому обходу DPI принадлежит их авторам:
 
 - **[Zapret](https://github.com/bol-van/zapret)** от **[@bol-van](https://github.com/bol-van)** — оригинальный движок обхода DPI (`winws.exe` + драйвер WinDivert). Это ядро, которое реально делает десинхронизацию. Лицензия зависит от компонентов проекта (в основном свободные).
-- **[zapret-discord-youtube](https://github.com/Flowseal/zapret-discord-youtube)** от **[@Flowseal](https://github.com/Flowseal)** — сборка Zapret с готовыми пресетами под Discord/YouTube (версия 1.9.9c). Именно её пресеты Dash Connect парсит и запускает; кастомные пресеты (`general (Dash Connect)`, блоки Telegram/игр/авто-детекта) сделаны на их основе.
+- **[zapret-discord-youtube](https://github.com/Flowseal/zapret-discord-youtube)** от **[@Flowseal](https://github.com/Flowseal)** — сборка Zapret с готовыми пресетами под Discord/YouTube (версия 1.9.9c). Именно её пресеты Dash Connect парсит и запускает; кастомные пресеты (`general (Dash Connect)`, блоки игр/авто-детекта) сделаны на их основе.
 - **[WinDivert](https://github.com/basil00/WinDivert)** от **@basil00** — драйвер перехвата пакетов, который использует Zapret.
 - **[sing-box](https://github.com/SagerNet/sing-box)** от **[SagerNet](https://github.com/SagerNet)** — опциональный TUN-туннель (для режима VPN, по умолчанию выключен).
 
