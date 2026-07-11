@@ -10,6 +10,7 @@
     <RootNamespace>DashConnect.App</RootNamespace>
     <AssemblyName>DashConnect</AssemblyName>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>app.ico</ApplicationIcon>
     <LangVersion>latest</LangVersion>
     <Product>DashConnect</Product>
     <Version>1.0.0</Version>
@@ -18,6 +19,12 @@
 
   <ItemGroup>
     <ProjectReference Include="..\DashConnect.Core\DashConnect.Core.csproj" />
+  </ItemGroup>
+
+  <!-- Custom brand icons (window + tray), embedded as WPF resources so they ship inside the
+       single-file exe and load via pack:// URIs. -->
+  <ItemGroup>
+    <Resource Include="Assets\*.png" />
   </ItemGroup>
 
   <!-- WinForms + WPF are both enabled (for the tray icon). Drop the WinForms implicit global

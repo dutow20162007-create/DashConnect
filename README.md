@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/banner.png" alt="Dash Connect" width="100%">
+</p>
+
 # Dash Connect ⚡
 
 **Однооконное Windows-приложение, снимающее блокировки РФ (Discord, YouTube, игры) через движок [Zapret](https://github.com/bol-van/zapret) — без VPN.**
