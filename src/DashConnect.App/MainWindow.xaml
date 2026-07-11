@@ -93,7 +93,8 @@
 
             <!-- ============ Sidebar ============ -->
             <Border Grid.Column="0" Background="{StaticResource Surface}" BorderBrush="{StaticResource Border}" BorderThickness="0,0,1,0">
-                <StackPanel Margin="0,14,0,0" HorizontalAlignment="Center">
+              <Grid>
+                <StackPanel VerticalAlignment="Top" Margin="0,14,0,0" HorizontalAlignment="Center">
                     <!-- Brand logo — clickable button that returns to the main (Подключение) view. -->
                     <Button Command="{Binding ShowViewCommand}" CommandParameter="0"
                             ToolTip="Dash Connect — на главную" Cursor="Hand"
@@ -137,6 +138,9 @@
                         <TextBlock Text="🗒" FontSize="17"/>
                     </Button>
                 </StackPanel>
+                <TextBlock Text="{Binding AppVersion}" VerticalAlignment="Bottom" HorizontalAlignment="Center"
+                           Margin="0,0,0,9" Foreground="{StaticResource Muted}" FontSize="9.5"/>
+              </Grid>
             </Border>
 
             <!-- ============ Content column ============ -->

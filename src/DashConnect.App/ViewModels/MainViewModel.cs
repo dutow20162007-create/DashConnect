@@ -109,6 +109,9 @@ public sealed class MainViewModel : ViewModelBase
     public ObservableCollection<SingboxProfile> Profiles { get; } = new();
     public ObservableCollection<string> VpnApps { get; } = new();
 
+    /// <summary>App version shown in the sidebar (e.g. "v1.0.11").</summary>
+    public string AppVersion => "v" + DashConnect.Core.Update.UpdateChecker.CurrentVersion;
+
     // ---- Navigation (0 = Подключение, 1 = Настройки, 2 = Журнал) ----
     public int ActiveView
     {
