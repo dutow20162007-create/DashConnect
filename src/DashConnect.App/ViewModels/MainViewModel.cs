@@ -60,6 +60,7 @@ public sealed class MainViewModel : ViewModelBase
         RefreshSubscriptionCommand = new AsyncRelayCommand(RefreshSubscriptionAsync, () => !IsBusy);
         AddDomainCommand = new RelayCommand(AddDomain, () => !string.IsNullOrWhiteSpace(NewDomainInput));
         AddVpnAppCommand = new RelayCommand(AddVpnApp, () => !string.IsNullOrWhiteSpace(NewAppInput));
+        PickVpnAppCommand = new RelayCommand(PickVpnApp);
         RemoveVpnAppCommand = new RelayCommand(RemoveVpnApp);
         OpenDataFolderCommand = new RelayCommand(() => OpenPath(Paths.AppDataDir));
         OpenZapretFolderCommand = new RelayCommand(() => OpenPath(_config.ZapretRoot));
@@ -87,6 +88,7 @@ public sealed class MainViewModel : ViewModelBase
     public ICommand RefreshSubscriptionCommand { get; }
     public ICommand AddDomainCommand { get; }
     public ICommand AddVpnAppCommand { get; }
+    public ICommand PickVpnAppCommand { get; }
     public ICommand RemoveVpnAppCommand { get; }
     public ICommand OpenDataFolderCommand { get; }
     public ICommand OpenZapretFolderCommand { get; }
@@ -363,6 +365,27 @@ public sealed class MainViewModel : ViewModelBase
             StatusText = $"«{app}» добавлена в VPN — переподключитесь, чтобы применить";
         }
         NewAppInput = "";
+    }
+
+    private void PickVpnApp()
+    {
+        var dlg = new Microsoft.Win32.OpenFileDialog
+        {
+            Title = "Выберите программу (.exe)",
+            Filter = "Программы (*.exe)|*.exe|Все файлы (*.*)|*.*",
+            CheckFileExists = true,
+        };
+        try { dlg.InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles); } catch { }
+
+        if (dlg.ShowDialog() != true) return;
+        var name = System.IO.Path.GetFileName(dlg.FileName);
+        if (string.IsNullOrWhiteSpace(name)) return;
+        if (!VpnApps.Any(a => a.Equals(name, StringComparison.OrdinalIgnoreCase)))
+        {
+            VpnApps.Add(name);
+            GameRoutesStore.SaveUserApps(VpnApps);
+            StatusText = $"«{name}» добавлена в VPN — переподключитесь, чтобы применить";
+        }
     }
 
     private void RemoveVpnApp(object? app)
