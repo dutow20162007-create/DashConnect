@@ -17,3 +17,6 @@ dist/
 
 # Session / local notes
 .remember/
+
+# Claude Code local settings
+.claude/
