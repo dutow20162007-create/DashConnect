@@ -10,6 +10,7 @@ public sealed class ProbeTarget
     public string? WebSocketPath { get; init; }    // e.g. "/?v=10&encoding=json"
     public bool Https { get; init; } = true;       // attempt an HTTPS request
     public bool Critical { get; init; } = true;    // must be Open for a strategy to be accepted
+    public bool TcpOnly { get; init; }             // MTProto/raw DC: TCP connect IS the probe (no TLS)
 }
 
 /// <summary>Outcome of probing a single host.</summary>

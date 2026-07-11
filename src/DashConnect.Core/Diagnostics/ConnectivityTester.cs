@@ -34,6 +34,8 @@ public sealed class ConnectivityTester
                 WebSocketPath = "/?v=10&encoding=json", Https = false, Critical = true },
         new() { Label = "YouTube",         Host = "www.youtube.com",            Https = true,  Critical = true },
         new() { Label = "YouTube CDN",     Host = "redirector.googlevideo.com", Https = true,  Critical = false },
+        // Telegram app talks MTProto (not TLS) to its data-centres, so probe a DC IP by raw TCP.
+        new() { Label = "Telegram",        Host = "149.154.167.51", Port = 443, TcpOnly = true, Https = false, Critical = false },
     };
 
     /// <summary>Fast critical-only set (TLS handshake only) used to score strategies quickly.</summary>
@@ -108,6 +110,7 @@ public sealed class ConnectivityTester
             using var connectCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
             connectCts.CancelAfter(TcpTimeoutMs);
 
+            var tcpSw = Stopwatch.StartNew();
             try
             {
                 await client.ConnectAsync(target.Host, target.Port, connectCts.Token);
@@ -117,6 +120,18 @@ public sealed class ConnectivityTester
             {
                 detail = $"tcp: {Simplify(ex)}";
                 return Build(target, tcp, tls, ws, httpStatus, handshakeMs, detail);
+            }
+
+            if (target.TcpOnly)
+            {
+                // Raw DC (MTProto isn't TLS): a successful TCP connect means the app's Telegram can reach it.
+                var connMs = tcpSw.Elapsed.TotalMilliseconds;
+                return new HostProbeResult
+                {
+                    Label = target.Label, Host = target.Host, Critical = target.Critical,
+                    TcpConnected = true, HandshakeMs = connMs,
+                    Verdict = connMs > ThrottleMs ? ServiceVerdict.Throttled : ServiceVerdict.Open,
+                };
             }
 
             using var ssl = new SslStream(client.GetStream(), leaveInnerStreamOpen: false, AcceptAnyCert);
