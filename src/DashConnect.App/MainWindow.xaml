@@ -157,7 +157,7 @@
                 </Grid>
 
                 <!-- ==== View: Подключение ==== -->
-                <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto"
+                <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Style="{StaticResource OverlayScroll}"
                               Visibility="{Binding IsConnectView, Converter={StaticResource B2V}}">
                     <StackPanel Margin="18,4,18,16">
                         <TextBlock Text="Время подключения" HorizontalAlignment="Center" Foreground="{StaticResource Muted}" FontSize="13"/>
@@ -331,7 +331,7 @@
                 </ScrollViewer>
 
                 <!-- ==== View: Настройки ==== -->
-                <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto"
+                <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Style="{StaticResource OverlayScroll}"
                               Visibility="{Binding IsSettingsView, Converter={StaticResource B2V}}">
                     <StackPanel Margin="18,4,18,16">
                         <TextBlock Text="Настройки" Style="{StaticResource H1}" Margin="0,0,0,12"/>

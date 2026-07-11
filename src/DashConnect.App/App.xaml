@@ -169,19 +169,20 @@
             </Setter>
         </Style>
 
-        <!-- ============ Slim custom scrollbar (dash-os) ============ -->
+        <!-- ============ Slim overlay scrollbar (dash-os) ============ -->
         <Style x:Key="ScrollThumb" TargetType="Thumb">
             <Setter Property="OverridesDefaultStyle" Value="True"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Thumb">
-                        <Border x:Name="t" CornerRadius="4" Background="#FF3A3A3A" Margin="2"/>
+                        <!-- semi-transparent so it floats over content without a heavy track -->
+                        <Border x:Name="t" CornerRadius="3" Background="#38FFFFFF" Margin="3,2"/>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="t" Property="Background" Value="#FF565656"/>
+                                <Setter TargetName="t" Property="Background" Value="#70FFFFFF"/>
                             </Trigger>
                             <Trigger Property="IsDragging" Value="True">
-                                <Setter TargetName="t" Property="Background" Value="#FF6E6E6E"/>
+                                <Setter TargetName="t" Property="Background" Value="#A0FFFFFF"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -191,7 +192,7 @@
 
         <Style TargetType="ScrollBar">
             <Setter Property="Background" Value="Transparent"/>
-            <Setter Property="Width" Value="9"/>
+            <Setter Property="Width" Value="10"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="ScrollBar">
@@ -232,6 +233,26 @@
                     </Setter>
                 </Trigger>
             </Style.Triggers>
+        </Style>
+
+        <!-- ScrollViewer whose vertical bar OVERLAYS the content on the right (reserves no layout
+             width, so it never squeezes the app). Content keeps full width; the thin bar floats. -->
+        <Style x:Key="OverlayScroll" TargetType="ScrollViewer">
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ScrollViewer">
+                        <Grid>
+                            <ScrollContentPresenter/>
+                            <ScrollBar x:Name="PART_VerticalScrollBar" Orientation="Vertical"
+                                       HorizontalAlignment="Right"
+                                       Value="{TemplateBinding VerticalOffset}"
+                                       Maximum="{TemplateBinding ScrollableHeight}"
+                                       ViewportSize="{TemplateBinding ViewportHeight}"
+                                       Visibility="{TemplateBinding ComputedVerticalScrollBarVisibility}"/>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
         </Style>
     </Application.Resources>
 </Application>
