@@ -128,10 +128,13 @@ public sealed class AppOrchestrator : IAsyncDisposable
                 vpnError = await StartVpnAsync(config, ct);
 
             // ---- Subsystem C: encrypted DNS (defeats DNS poisoning that DPI can't reach) ----
-            if (config.CleanDnsEnabled && (_zapret.IsRunning || _singbox.IsRunning))
+            // Applied whenever the user wants it — not gated on winws timing, so it never silently
+            // no-ops. Verified inside ApplyAsync.
+            bool dnsOk = false;
+            if (config.CleanDnsEnabled)
             {
                 Status("Включаю зашифрованный DNS…");
-                await DnsManager.ApplyAsync(ct);
+                dnsOk = await DnsManager.ApplyAsync(ct);
                 _dnsApplied = true;
             }
 
@@ -142,7 +145,10 @@ public sealed class AppOrchestrator : IAsyncDisposable
 
             var connected = _zapret.IsRunning || _singbox.IsRunning || (needZapret && directOpen);
             SetState(connected ? EngineState.Running : EngineState.Error);
-            Status(BuildSummary(finalReport, directOpen));
+            var summary = BuildSummary(finalReport, directOpen);
+            if (config.CleanDnsEnabled)
+                summary += dnsOk ? "  •  DNS 1.1.1.1 (DoH)" : "  •  DNS не применён";
+            Status(summary);
 
             return new ConnectionOutcome(
                 _zapret.IsRunning, _zapret.Current, _singbox.IsRunning, vpnError, finalReport, directOpen);

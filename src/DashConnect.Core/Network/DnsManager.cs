@@ -27,12 +27,18 @@ public static class DnsManager
 
     public static bool HasPendingBackup => File.Exists(BackupFile);
 
-    /// <summary>Back up current DNS, then point every active adapter at Cloudflare DoH.</summary>
-    public static async Task ApplyAsync(CancellationToken ct = default)
+    /// <summary>Back up current DNS, then point every active adapter at Cloudflare DoH. Returns true
+    /// once the change is verified live on at least one adapter (no silent stubs).</summary>
+    public static async Task<bool> ApplyAsync(CancellationToken ct = default)
     {
         try
         {
             var adapters = ActiveAdapters();
+            if (adapters.Count == 0)
+            {
+                Log.Warn("dns", "нет активного адаптера с IPv4-шлюзом — DNS не изменён");
+                return false;
+            }
 
             // Capture originals ONCE — never overwrite a real backup with our own Cloudflare values.
             if (!File.Exists(BackupFile))
@@ -59,9 +65,26 @@ public static class DnsManager
                 await NetshAsync($"interface ipv6 add dnsservers name=\"{name}\" {V6[1]} index=2", ct);
             }
             await FlushAsync(ct);
-            Log.Info("dns", $"включён зашифрованный DNS (Cloudflare DoH) на {adapters.Count} адаптер(ах)");
+
+            // Verify it actually took — surface a clear result instead of assuming success.
+            await Task.Delay(150, ct);
+            bool ok = IsCloudflareActive(adapters);
+            Log.Info("dns", ok
+                ? $"зашифрованный DNS активен (Cloudflare DoH) на {adapters.Count} адаптер(ах): {V4[0]}"
+                : "DNS применён, но 1.1.1.1 не подтвердился (возможно активен сторонний VPN-адаптер)");
+            return ok;
         }
-        catch (Exception ex) { Log.Warn("dns", $"не удалось включить чистый DNS: {ex.Message}"); }
+        catch (Exception ex) { Log.Warn("dns", $"не удалось включить чистый DNS: {ex.Message}"); return false; }
+    }
+
+    /// <summary>True if any target adapter now resolves through Cloudflare (live check).</summary>
+    private static bool IsCloudflareActive(IReadOnlyList<(string Name, string Guid)> adapters)
+    {
+        var names = adapters.Select(a => a.Name).ToHashSet();
+        return NetworkInterface.GetAllNetworkInterfaces()
+            .Where(n => names.Contains(n.Name))
+            .SelectMany(n => n.GetIPProperties().DnsAddresses)
+            .Any(a => a.ToString() == V4[0]);
     }
 
     /// <summary>Restore the exact DNS config captured by <see cref="ApplyAsync"/>. No-op if none.</summary>
