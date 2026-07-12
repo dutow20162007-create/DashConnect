@@ -98,6 +98,8 @@ public partial class App : Application
             }
         }
 
+        EnsureDesktopShortcut();
+
         _orchestrator = new AppOrchestrator();
         var vm = new MainViewModel(_orchestrator, _config, Dispatcher);
 
@@ -137,6 +139,45 @@ public partial class App : Application
             new UpdateWindow(info) { Owner = _window }.Show();
         }
         catch (Exception ex) { Log.Debug("update", $"update flow: {ex.Message}"); }
+    }
+
+    /// <summary>
+    /// Guarantees a desktop shortcut on the user's REAL desktop. A per-machine MSI drops its shortcut
+    /// on the Public desktop, which OneDrive Desktop redirection can hide; <see cref="Environment.SpecialFolder.DesktopDirectory"/>
+    /// resolves the actual (redirected) desktop, so the icon always shows. Created via WScript.Shell
+    /// (late-bound COM, no extra reference) only when missing.
+    /// </summary>
+    private static void EnsureDesktopShortcut()
+    {
+        try
+        {
+            // Do this once. If the user later deletes the shortcut on purpose, don't fight them.
+            var marker = System.IO.Path.Combine(Paths.AppDataDir, ".desktop-shortcut");
+            if (System.IO.File.Exists(marker)) return;
+
+            var exe = Environment.ProcessPath;
+            if (string.IsNullOrEmpty(exe)) return;
+            var desktop = Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
+            if (string.IsNullOrEmpty(desktop)) return;
+            var lnk = System.IO.Path.Combine(desktop, "Dash Connect.lnk");
+            if (System.IO.File.Exists(lnk)) { Paths.EnsureDirectories(); System.IO.File.WriteAllText(marker, "1"); return; }
+
+            var shellType = Type.GetTypeFromProgID("WScript.Shell");
+            if (shellType is null) return;
+            var shell = Activator.CreateInstance(shellType);
+            var sc = shellType.InvokeMember("CreateShortcut", System.Reflection.BindingFlags.InvokeMethod, null, shell, new object[] { lnk });
+            var t = sc!.GetType();
+            void Set(string prop, object val) => t.InvokeMember(prop, System.Reflection.BindingFlags.SetProperty, null, sc, new[] { val });
+            Set("TargetPath", exe);
+            Set("WorkingDirectory", System.IO.Path.GetDirectoryName(exe) ?? "");
+            Set("IconLocation", exe + ",0");
+            Set("Description", "Dash Connect — обход блокировок РФ без VPN");
+            t.InvokeMember("Save", System.Reflection.BindingFlags.InvokeMethod, null, sc, null);
+            Paths.EnsureDirectories();
+            System.IO.File.WriteAllText(marker, "1");
+            Log.Info("app", "ярлык на рабочем столе создан");
+        }
+        catch (Exception ex) { Log.Debug("app", $"ярлык: {ex.Message}"); }
     }
 
     private void UpdateTray()
