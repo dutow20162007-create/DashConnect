@@ -1,6 +1,7 @@
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using DashConnect.Core.Logging;
 
 namespace DashConnect.Core.Update;
@@ -13,14 +14,23 @@ public sealed record UpdateInfo(string Version, string DownloadUrl, string Notes
 /// </summary>
 public static class UpdateChecker
 {
-    public const string CurrentVersion = "1.0.17";
+    public const string CurrentVersion = "1.0.18";
     public const string Owner = "dutow20162007-create";
     public const string Repo = "DashConnect";
 
     public static string ReleasesPage => $"https://github.com/{Owner}/{Repo}/releases/latest";
 
-    /// <summary>Returns update info if a newer release exists, otherwise null (never throws).</summary>
+    /// <summary>Returns update info if a newer release exists, otherwise null (never throws). Tries
+    /// the rich GitHub API first, then a github.com redirect (more reachable on RU ISPs).</summary>
     public static async Task<UpdateInfo?> CheckAsync(CancellationToken ct = default)
+    {
+        var latest = await LatestViaApiAsync(ct) ?? await LatestViaRedirectAsync(ct);
+        if (latest is null) return null;
+        return IsNewer(latest.Version, CurrentVersion) ? latest : null;
+    }
+
+    /// <summary>Latest release via api.github.com (rich: real asset URL + notes). Null on failure.</summary>
+    private static async Task<UpdateInfo?> LatestViaApiAsync(CancellationToken ct)
     {
         try
         {
@@ -32,8 +42,7 @@ public static class UpdateChecker
             using var doc = JsonDocument.Parse(json);
             var root = doc.RootElement;
             var tag = (root.TryGetProperty("tag_name", out var t) ? t.GetString() : null)?.TrimStart('v', 'V') ?? "";
-            if (string.IsNullOrWhiteSpace(tag) || !IsNewer(tag, CurrentVersion))
-                return null;
+            if (string.IsNullOrWhiteSpace(tag)) return null;
 
             var notes = root.TryGetProperty("body", out var b) ? b.GetString() ?? "" : "";
             string? msi = null;
@@ -47,12 +56,36 @@ public static class UpdateChecker
                         break;
                     }
                 }
-
             return new UpdateInfo(tag, msi ?? ReleasesPage, notes);
         }
         catch (Exception ex)
         {
-            Log.Debug("update", $"проверка обновлений не удалась: {ex.Message}");
+            Log.Debug("update", $"api.github.com недоступен: {ex.Message}");
+            return null;
+        }
+    }
+
+    /// <summary>Fallback: read the tag from the github.com/…/releases/latest redirect and build the
+    /// asset URL from the known naming pattern. api.github.com is often blocked in RU; github.com
+    /// (especially with the DPI bypass on) is far more reachable.</summary>
+    private static async Task<UpdateInfo?> LatestViaRedirectAsync(CancellationToken ct)
+    {
+        try
+        {
+            using var handler = new HttpClientHandler { AllowAutoRedirect = false };
+            using var http = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(15) };
+            http.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("DashConnect", CurrentVersion));
+            var resp = await http.GetAsync($"https://github.com/{Owner}/{Repo}/releases/latest", ct);
+            var location = resp.Headers.Location?.ToString() ?? "";
+            var m = Regex.Match(location, @"/tag/v?([0-9][0-9.]*)");
+            if (!m.Success) return null;
+            var tag = m.Groups[1].Value;
+            var msi = $"https://github.com/{Owner}/{Repo}/releases/download/v{tag}/DashConnect-{tag}.msi";
+            return new UpdateInfo(tag, msi, "");
+        }
+        catch (Exception ex)
+        {
+            Log.Debug("update", $"github.com редирект недоступен: {ex.Message}");
             return null;
         }
     }

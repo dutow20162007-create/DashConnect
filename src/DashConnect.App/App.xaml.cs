@@ -106,7 +106,17 @@ public partial class App : Application
         _tray.ToggleRequested += () => vm.ToggleConnectCommand.Execute(null);
         _tray.ExitRequested += ExitApp;
 
-        _orchestrator.StateChanged += _ => Dispatcher.Invoke(UpdateTray);
+        _orchestrator.StateChanged += s => Dispatcher.Invoke(() =>
+        {
+            UpdateTray();
+            // Re-check for updates once we're connected: at startup the DPI bypass is off and
+            // api/github.com may be blocked on the ISP, so the first check often silently fails.
+            if (s == EngineState.Running && !_updateReChecked)
+            {
+                _updateReChecked = true;
+                _ = CheckForUpdatesAsync();
+            }
+        });
         _orchestrator.StatusChanged += _ => Dispatcher.Invoke(UpdateTray);
 
         _window = new MainWindow { DataContext = vm };
@@ -154,6 +164,7 @@ public partial class App : Application
     }
 
     private bool _exitStarted;
+    private bool _updateReChecked;
 
     public void ExitApp()
     {
