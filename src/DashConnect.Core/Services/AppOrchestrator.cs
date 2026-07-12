@@ -20,6 +20,8 @@ public sealed class AppOrchestrator : IAsyncDisposable
     private readonly ConnectivityTester _tester = new();
     private readonly SingboxDownloader _downloader = new();
     private readonly StrategySelector _selector;
+    private readonly TgWsProxyManager _tgws = new();
+    private readonly TelegramFixer _telegramFixer = new();
 
     private CancellationTokenSource? _cts;
     private readonly object _ctsLock = new();
@@ -36,6 +38,12 @@ public sealed class AppOrchestrator : IAsyncDisposable
     public bool DpiActive => _zapret.IsRunning;
     public bool GameRoutingActive => _singbox.IsRunning;
     public bool IsConnected => _zapret.IsRunning || _singbox.IsRunning;
+
+    /// <summary>The Telegram WebSocket bridge is running (tg-ws-proxy on 127.0.0.1:1443).</summary>
+    public bool TelegramProxyActive => _tgws.IsRunning;
+
+    /// <summary>tg:// link Telegram opens to enable the bridge — valid only while it is running.</summary>
+    public string TelegramProxyLink => _tgws.TgLink;
 
     public event Action<string>? StatusChanged;
     public event Action<double>? ProgressChanged;
@@ -138,6 +146,17 @@ public sealed class AppOrchestrator : IAsyncDisposable
                 _dnsApplied = true;
             }
 
+            // ---- Subsystem D: Telegram WebSocket bridge (Flowseal tg-ws-proxy) ----
+            // Telegram talks to its DCs by IP (MTProto), so plain DPI desync doesn't fix it. The bridge
+            // wraps that traffic in WebSocket/TLS to Telegram's own domains — plain HTTPS to the DPI,
+            // no third-party server. Start it whenever enabled so Telegram keeps working once configured.
+            if (config.TelegramFixEnabled)
+            {
+                var secret = EnsureTelegramSecret(config);
+                Status("Поднимаю мост Telegram…");
+                await _tgws.StartAsync(config.ZapretRoot, secret, Status, ct);
+            }
+
             // ---- Final verification ----
             Status("Проверка соединения…");
             finalReport = await _tester.RunDefaultAsync(ct);
@@ -217,6 +236,31 @@ public sealed class AppOrchestrator : IAsyncDisposable
         return null;
     }
 
+    /// <summary>
+    /// "Make Telegram work": brings up the bundled WebSocket bridge (primary — no external server) and
+    /// returns the tg:// link to hand to Telegram Desktop. If the bridge can't run (exe missing, port
+    /// busy), falls back to Cloudflare WARP, then a live public MTProto proxy.
+    /// </summary>
+    public async Task<TelegramFixResult> FixTelegramAsync(AppConfig config, Action<string>? status = null, CancellationToken ct = default)
+    {
+        if (config.TelegramFixEnabled)
+        {
+            var secret = EnsureTelegramSecret(config);
+            if (await _tgws.StartAsync(config.ZapretRoot, secret, status, ct))
+                return new TelegramFixResult(true, _tgws.TgLink,
+                    "Мост Telegram поднят. В открывшемся Telegram нажми «Подключить прокси» — и всё.");
+        }
+        return await _telegramFixer.FixAsync(status, ct);
+    }
+
+    /// <summary>Returns the persisted MTProto secret, generating and storing one on first use.</summary>
+    private static string EnsureTelegramSecret(AppConfig config)
+    {
+        if (string.IsNullOrWhiteSpace(config.TgWsProxySecret) || config.TgWsProxySecret.Length != 32)
+            config.TgWsProxySecret = TgWsProxyManager.NewSecret();
+        return config.TgWsProxySecret;
+    }
+
     public async Task DisconnectAsync()
     {
         lock (_ctsLock) { try { _cts?.Cancel(); } catch { } }
@@ -250,6 +294,7 @@ public sealed class AppOrchestrator : IAsyncDisposable
             await DnsManager.RevertAsync(CancellationToken.None);
             _dnsApplied = false;
         }
+        _tgws.Stop();
         await _zapret.StopAsync(ct);
         await _singbox.StopAsync(ct);
         await ZapretManager.KillOrphansAsync(ct);
@@ -284,6 +329,8 @@ public sealed class AppOrchestrator : IAsyncDisposable
         try { await StopAllAsync(CancellationToken.None); } catch { }
         await _zapret.DisposeAsync();
         await _singbox.DisposeAsync();
+        await _tgws.DisposeAsync();
+        await _telegramFixer.DisposeAsync();
         _opGate.Dispose();
     }
 }

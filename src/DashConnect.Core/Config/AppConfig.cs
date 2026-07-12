@@ -53,6 +53,21 @@ public sealed class AppConfig
     /// <summary>Name of the profile selected from the subscription.</summary>
     public string? SelectedProfileName { get; set; }
 
+    // ---- Telegram (WebSocket bridge — Flowseal tg-ws-proxy) ----
+
+    /// <summary>Run the bundled tg-ws-proxy on Connect so Telegram works. It's a local MTProto proxy
+    /// that wraps Telegram in a WebSocket/TLS tunnel to Telegram's OWN data-centres — looks like plain
+    /// HTTPS to the DPI, needs no third-party server. On by default.</summary>
+    public bool TelegramFixEnabled { get; set; } = true;
+
+    /// <summary>Stable 32-hex MTProto secret for the local proxy. Generated once and kept, so the
+    /// tg:// proxy link Telegram remembers keeps matching across restarts.</summary>
+    public string TgWsProxySecret { get; set; } = "";
+
+    /// <summary>True once Telegram has been handed the tg:// proxy link, so we auto-prompt only on the
+    /// very first connect and stay silent afterwards.</summary>
+    public bool TelegramConfigured { get; set; }
+
     // ---- App ----
 
     public bool MinimizeToTrayOnClose { get; set; } = true;

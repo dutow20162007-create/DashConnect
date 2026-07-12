@@ -24,7 +24,6 @@ public sealed class MainViewModel : ViewModelBase
     private readonly AppConfig _config;
     private readonly Dispatcher _dispatcher;
     private readonly DispatcherTimer _timer;
-    private readonly TelegramFixer _telegramFixer = new();
 
     private const int MaxLogLines = 400;
 
@@ -207,6 +206,12 @@ public sealed class MainViewModel : ViewModelBase
         set { if (_config.GameDpiEnabled != value) { _config.GameDpiEnabled = value; OnPropertyChanged(); Save(); } }
     }
 
+    public bool TelegramFixEnabled
+    {
+        get => _config.TelegramFixEnabled;
+        set { if (_config.TelegramFixEnabled != value) { _config.TelegramFixEnabled = value; OnPropertyChanged(); Save(); } }
+    }
+
     public bool VpnEnabled
     {
         get => _config.VpnEnabled;
@@ -312,7 +317,24 @@ public sealed class MainViewModel : ViewModelBase
         if (_connecting) return; // ignore re-entrant clicks while a connect is spinning up
         _connecting = true;
         // Run the whole connect sequence on a background thread so the UI never blocks.
-        try { await Task.Run(() => _orchestrator.ConnectAsync(_config)); }
+        try
+        {
+            await Task.Run(() => _orchestrator.ConnectAsync(_config));
+            Save(); // persist a freshly generated Telegram proxy secret, if any
+
+            // First connect ever: hand Telegram the proxy link once so it "just works" from now on.
+            // Afterwards Telegram remembers the proxy and every connect brings it back silently.
+            if (_config.TelegramFixEnabled && !_config.TelegramConfigured && _orchestrator.TelegramProxyActive)
+            {
+                OnUi(() =>
+                {
+                    LaunchTgLink(_orchestrator.TelegramProxyLink);
+                    _config.TelegramConfigured = true;
+                    Save();
+                    StatusText = "Готово. В Telegram нажми «Подключить прокси» — дальше он сам.";
+                });
+            }
+        }
         catch (Exception ex) { Log.Error("ui", "connect failed", ex); }
         finally { _connecting = false; }
     }
@@ -353,15 +375,16 @@ public sealed class MainViewModel : ViewModelBase
     {
         try
         {
-            StatusText = "Настраиваю Telegram (WARP / прокси)…";
-            var result = await Task.Run(() => _telegramFixer.FixAsync(s => OnUi(() => StatusText = s)));
+            StatusText = "Настраиваю Telegram…";
+            var result = await Task.Run(() => _orchestrator.FixTelegramAsync(_config, s => OnUi(() => StatusText = s)));
+            Save(); // persist the freshly generated proxy secret
             OnUi(() =>
             {
                 if (!string.IsNullOrEmpty(result.TgLink))
                 {
-                    // Hand the tg:// link to Telegram Desktop (one-click enable inside Telegram).
-                    try { Process.Start(new ProcessStartInfo(result.TgLink) { UseShellExecute = true }); }
-                    catch (Exception ex) { Log.Warn("ui", $"tg link: {ex.Message}"); }
+                    LaunchTgLink(result.TgLink);
+                    _config.TelegramConfigured = true;
+                    Save();
                 }
                 StatusText = result.Message;
             });
@@ -371,6 +394,13 @@ public sealed class MainViewModel : ViewModelBase
             Log.Error("ui", "telegram fix failed", ex);
             OnUi(() => StatusText = $"Telegram: ошибка — {ex.Message}");
         }
+    }
+
+    /// <summary>Hands a tg:// link to Telegram Desktop (one-click enable inside Telegram).</summary>
+    private static void LaunchTgLink(string tgLink)
+    {
+        try { Process.Start(new ProcessStartInfo(tgLink) { UseShellExecute = true }); }
+        catch (Exception ex) { Log.Warn("ui", $"tg link: {ex.Message}"); }
     }
 
     private void AddDomain()

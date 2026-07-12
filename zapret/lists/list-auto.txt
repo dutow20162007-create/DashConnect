@@ -1,2 +1,6 @@
 dynamodb.me-south-1.amazonaws.com
 ublockorigin.pages.dev
+easylist-downloads.adblockplus.org
+abp.telemetry.adblockplus.org
+googleads.g.doubleclick.net
+static.doubleclick.net

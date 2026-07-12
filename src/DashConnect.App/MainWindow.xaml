@@ -417,9 +417,17 @@
                                 <TextBlock Text="{Binding PinnedInfo}" Style="{StaticResource Sub}" TextWrapping="Wrap" Margin="2,6,0,0"/>
 
                                 <TextBlock Text="Telegram" Style="{StaticResource Sub}" FontWeight="SemiBold" Margin="0,16,0,2"/>
-                                <TextBlock Text="если Telegram не берётся через DPI — жми кнопку: прога сама поднимет Cloudflare WARP (или найдёт рабочий прокси) и настроит Telegram. Один клик подтверждения в самом Telegram."
+                                <Grid Margin="0,2,0,4">
+                                    <StackPanel>
+                                        <TextBlock Text="Мост Telegram при подключении" Style="{StaticResource Label}"/>
+                                        <TextBlock Text="локальный WebSocket-мост к серверам Telegram — работает сам после первого раза" Style="{StaticResource Sub}"/>
+                                    </StackPanel>
+                                    <CheckBox Style="{StaticResource Switch}" HorizontalAlignment="Right"
+                                              IsChecked="{Binding TelegramFixEnabled}" IsEnabled="{Binding CanEditSettings}"/>
+                                </Grid>
+                                <TextBlock Text="жми, чтобы настроить Telegram сейчас: прога поднимает свой WebSocket-мост к дата-центрам Telegram (выглядит как обычный HTTPS, без чужого сервера). Один клик «Подключить прокси» в самом Telegram — дальше он подключается сам. Если мост недоступен — резервно поднимет Cloudflare WARP или найдёт рабочий прокси."
                                            Style="{StaticResource Sub}" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,6"/>
-                                <Button Content="🔵  Починить Telegram" Style="{StaticResource GhostButton}"
+                                <Button Content="🔵  Настроить Telegram" Style="{StaticResource GhostButton}"
                                         HorizontalAlignment="Stretch" Height="38" Command="{Binding FixTelegramCommand}"/>
 
                                 <TextBlock Text="Добавить заблокированный домен" Style="{StaticResource Sub}" Margin="0,16,0,4"/>

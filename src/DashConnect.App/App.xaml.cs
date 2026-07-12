@@ -185,6 +185,7 @@ public partial class App : Application
                     await orch.DisposeAsync();
                 }
                 await DashConnect.Core.Network.WarpManager.KillOrphansAsync(); // stop the WARP relay on exit
+                await DashConnect.Core.Network.TgWsProxyManager.KillOrphansAsync(); // stop the Telegram bridge on exit
             }
             catch (Exception ex) { Log.Warn("app", $"очистка при выходе: {ex.Message}"); }
             finally
