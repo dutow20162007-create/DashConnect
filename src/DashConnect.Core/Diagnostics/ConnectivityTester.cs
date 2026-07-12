@@ -34,9 +34,15 @@ public sealed class ConnectivityTester
                 WebSocketPath = "/?v=10&encoding=json", Https = false, Critical = true },
         new() { Label = "YouTube",         Host = "www.youtube.com",            Https = true,  Critical = true },
         new() { Label = "YouTube CDN",     Host = "redirector.googlevideo.com", Https = true,  Critical = false },
-        // Telegram app talks MTProto (not TLS) to its data-centres, so probe a DC IP by raw TCP.
-        new() { Label = "Telegram",        Host = "149.154.167.51", Port = 443, TcpOnly = true, Https = false, Critical = false },
+        // Telegram servers over TLS (SNI) — reachable through the DPI bypass, so this shows a real ping
+        // instead of the "no connection" you get probing a raw MTProto DC IP (which the ISP drops).
+        new() { Label = "Telegram",        Host = "web.telegram.org", Https = true, Critical = false },
+        // The local WebSocket bridge: green with a ~0 ms ping when the Telegram fix is actually running.
+        new() { Label = "Telegram (мост)", Host = "127.0.0.1", Port = TgBridgePort, TcpOnly = true, Https = false, Critical = false },
     };
+
+    /// <summary>Port the bundled tg-ws-proxy bridge listens on (kept in sync with TgWsProxyManager.Port).</summary>
+    public const int TgBridgePort = 1443;
 
     /// <summary>Fast critical-only set (TLS handshake only) used to score strategies quickly.</summary>
     public static IReadOnlyList<ProbeTarget> SelectionTargets { get; } = new List<ProbeTarget>

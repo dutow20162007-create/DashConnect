@@ -322,17 +322,19 @@ public sealed class MainViewModel : ViewModelBase
             await Task.Run(() => _orchestrator.ConnectAsync(_config));
             Save(); // persist a freshly generated Telegram proxy secret, if any
 
-            // First connect ever: hand Telegram the proxy link once so it "just works" from now on.
-            // Afterwards Telegram remembers the proxy and every connect brings it back silently.
+            // First connect ever: hand Telegram the proxy link once, fully in the background — launch
+            // Telegram if it's closed and best-effort auto-confirm its prompt. Afterwards Telegram
+            // remembers the proxy and every connect brings it back with nothing to do.
             if (_config.TelegramFixEnabled && !_config.TelegramConfigured && _orchestrator.TelegramProxyActive)
             {
-                OnUi(() =>
-                {
-                    LaunchTgLink(_orchestrator.TelegramProxyLink);
-                    _config.TelegramConfigured = true;
-                    Save();
-                    StatusText = "Готово. В Telegram нажми «Подключить прокси» — дальше он сам.";
-                });
+                var link = _orchestrator.TelegramProxyLink;
+                _config.TelegramConfigured = true;
+                Save();
+                OnUi(() => StatusText = "Настраиваю Telegram в фоне…");
+                bool auto = await Task.Run(() => TelegramDesktop.ApplyProxyLinkAsync(link));
+                OnUi(() => StatusText = auto
+                    ? "Готово — Telegram подключён автоматически."
+                    : "Почти готово: в Telegram один раз нажми «Подключить прокси» — дальше он сам.");
             }
         }
         catch (Exception ex) { Log.Error("ui", "connect failed", ex); }
@@ -378,29 +380,20 @@ public sealed class MainViewModel : ViewModelBase
             StatusText = "Настраиваю Telegram…";
             var result = await Task.Run(() => _orchestrator.FixTelegramAsync(_config, s => OnUi(() => StatusText = s)));
             Save(); // persist the freshly generated proxy secret
-            OnUi(() =>
+            if (!string.IsNullOrEmpty(result.TgLink))
             {
-                if (!string.IsNullOrEmpty(result.TgLink))
-                {
-                    LaunchTgLink(result.TgLink);
-                    _config.TelegramConfigured = true;
-                    Save();
-                }
-                StatusText = result.Message;
-            });
+                _config.TelegramConfigured = true;
+                Save();
+                bool auto = await Task.Run(() => TelegramDesktop.ApplyProxyLinkAsync(result.TgLink!));
+                OnUi(() => StatusText = auto ? "Telegram подключён автоматически." : result.Message);
+            }
+            else OnUi(() => StatusText = result.Message);
         }
         catch (Exception ex)
         {
             Log.Error("ui", "telegram fix failed", ex);
             OnUi(() => StatusText = $"Telegram: ошибка — {ex.Message}");
         }
-    }
-
-    /// <summary>Hands a tg:// link to Telegram Desktop (one-click enable inside Telegram).</summary>
-    private static void LaunchTgLink(string tgLink)
-    {
-        try { Process.Start(new ProcessStartInfo(tgLink) { UseShellExecute = true }); }
-        catch (Exception ex) { Log.Warn("ui", $"tg link: {ex.Message}"); }
     }
 
     private void AddDomain()

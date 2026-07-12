@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using System.Windows.Media.Effects;
 using System.Windows.Shapes;
 
 namespace DashConnect.App.Controls;
@@ -24,13 +25,17 @@ public sealed class ParticleCanvas : Canvas
     private DateTime _last;
     private double _burstMs;
 
-    private const int Count = 48;
+    private const int Count = 130;
     private const double BurstDurationMs = 2000;
 
     public ParticleCanvas()
     {
         IsHitTestVisible = false;
         ClipToBounds = true;
+        // Soft frosted-glass haze: the whole field is lightly blurred so the translucent cards on top
+        // read as glass with particles diffusing behind them. Performance bias keeps the per-frame
+        // re-raster cheap even with a dense field.
+        Effect = new BlurEffect { Radius = 3.5, KernelType = KernelType.Gaussian, RenderingBias = RenderingBias.Performance };
         Loaded += (_, _) => Start();
         Unloaded += (_, _) => Stop();
         IsVisibleChanged += (_, e) => { if ((bool)e.NewValue) Start(); else Stop(); };
@@ -59,13 +64,14 @@ public sealed class ParticleCanvas : Canvas
     {
         for (int i = 0; i < Count; i++)
         {
-            double size = 1.5 + _rnd.NextDouble() * 2.6;
+            double size = 1.4 + _rnd.NextDouble() * 3.0;
             var dot = new Ellipse
             {
                 Width = size,
                 Height = size,
                 Fill = Brushes.White,
-                Opacity = 0.05 + _rnd.NextDouble() * 0.16,
+                // Brighter than before so the dots stay visible through the translucent glass cards.
+                Opacity = 0.08 + _rnd.NextDouble() * 0.30,
             };
             Children.Add(dot);
             var p = new Particle { Dot = dot, Size = size };

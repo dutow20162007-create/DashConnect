@@ -4,9 +4,10 @@
     <Application.Resources>
         <!-- ============ Palette (monochrome / dash-os) ============ -->
         <SolidColorBrush x:Key="Bg" Color="#FF0A0A0A"/>
-        <SolidColorBrush x:Key="Surface" Color="#FF141414"/>
-        <SolidColorBrush x:Key="SurfaceAlt" Color="#FF1E1E1E"/>
-        <SolidColorBrush x:Key="Border" Color="#FF2A2A2A"/>
+        <!-- Translucent "glass" surfaces: the drifting particle field shows through the cards. -->
+        <SolidColorBrush x:Key="Surface" Color="#A8141414"/>
+        <SolidColorBrush x:Key="SurfaceAlt" Color="#A81E1E1E"/>
+        <SolidColorBrush x:Key="Border" Color="#3DFFFFFF"/>
         <SolidColorBrush x:Key="Text" Color="#FFF2F2F2"/>
         <SolidColorBrush x:Key="Muted" Color="#FF8A8A8A"/>
         <SolidColorBrush x:Key="Accent" Color="#FFFFFFFF"/>
