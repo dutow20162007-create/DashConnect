@@ -8,6 +8,7 @@ using DashConnect.Core.Config;
 using DashConnect.Core.Diagnostics;
 using DashConnect.Core.Logging;
 using DashConnect.Core.Models;
+using DashConnect.Core.Network;
 using DashConnect.Core.Services;
 using DashConnect.Core.Singbox;
 using DashConnect.Core.Util;
@@ -23,6 +24,7 @@ public sealed class MainViewModel : ViewModelBase
     private readonly AppConfig _config;
     private readonly Dispatcher _dispatcher;
     private readonly DispatcherTimer _timer;
+    private readonly TelegramFixer _telegramFixer = new();
 
     private const int MaxLogLines = 400;
 
@@ -59,6 +61,7 @@ public sealed class MainViewModel : ViewModelBase
         RunDiagnosticsCommand = new AsyncRelayCommand(RunDiagnosticsAsync, () => !IsBusy);
         RefreshSubscriptionCommand = new AsyncRelayCommand(RefreshSubscriptionAsync, () => !IsBusy);
         AddDomainCommand = new RelayCommand(AddDomain, () => !string.IsNullOrWhiteSpace(NewDomainInput));
+        FixTelegramCommand = new AsyncRelayCommand(FixTelegramAsync, () => !IsBusy);
         AddVpnAppCommand = new RelayCommand(AddVpnApp, () => !string.IsNullOrWhiteSpace(NewAppInput));
         PickVpnAppCommand = new RelayCommand(PickVpnApp);
         RemoveVpnAppCommand = new RelayCommand(RemoveVpnApp);
@@ -87,6 +90,7 @@ public sealed class MainViewModel : ViewModelBase
     public ICommand RunDiagnosticsCommand { get; }
     public ICommand RefreshSubscriptionCommand { get; }
     public ICommand AddDomainCommand { get; }
+    public ICommand FixTelegramCommand { get; }
     public ICommand AddVpnAppCommand { get; }
     public ICommand PickVpnAppCommand { get; }
     public ICommand RemoveVpnAppCommand { get; }
@@ -342,6 +346,30 @@ public sealed class MainViewModel : ViewModelBase
         catch (Exception ex)
         {
             OnUi(() => StatusText = $"Подписка недоступна: {ex.Message}");
+        }
+    }
+
+    private async Task FixTelegramAsync()
+    {
+        try
+        {
+            StatusText = "Настраиваю Telegram (WARP / прокси)…";
+            var result = await Task.Run(() => _telegramFixer.FixAsync(s => OnUi(() => StatusText = s)));
+            OnUi(() =>
+            {
+                if (!string.IsNullOrEmpty(result.TgLink))
+                {
+                    // Hand the tg:// link to Telegram Desktop (one-click enable inside Telegram).
+                    try { Process.Start(new ProcessStartInfo(result.TgLink) { UseShellExecute = true }); }
+                    catch (Exception ex) { Log.Warn("ui", $"tg link: {ex.Message}"); }
+                }
+                StatusText = result.Message;
+            });
+        }
+        catch (Exception ex)
+        {
+            Log.Error("ui", "telegram fix failed", ex);
+            OnUi(() => StatusText = $"Telegram: ошибка — {ex.Message}");
         }
     }
 

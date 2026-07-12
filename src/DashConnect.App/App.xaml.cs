@@ -173,6 +173,7 @@ public partial class App : Application
                     await orch.DisconnectAsync();
                     await orch.DisposeAsync();
                 }
+                await DashConnect.Core.Network.WarpManager.KillOrphansAsync(); // stop the WARP relay on exit
             }
             catch (Exception ex) { Log.Warn("app", $"очистка при выходе: {ex.Message}"); }
             finally
