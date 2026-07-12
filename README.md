@@ -2,161 +2,73 @@
   <img src="docs/banner.png" alt="Dash Connect" width="100%">
 </p>
 
-# Dash Connect ⚡
+<h1 align="center">Dash Connect ⚡</h1>
 
-**Однооконное Windows-приложение, снимающее блокировки РФ (Discord, YouTube, игры) через движок [Zapret](https://github.com/bol-van/zapret) — без VPN.**
+<p align="center">
+  <b>Обход блокировок РФ — Discord, YouTube, Telegram, игры — в одну кнопку. Без VPN.</b>
+</p>
 
-Одна кнопка **Подключить** — и работают Discord, YouTube, игровые серверы (Fortnite / Apex / Dead by Daylight / FACEIT) и всё остальное, что блокируется на уровне DPI. Приложение запускается от администратора, само подбирает рабочую стратегию DPI-десинхронизации и живёт в системном трее.
+<p align="center">
+  <a href="https://t.me/HUGOVSYKAYA"><img src="https://img.shields.io/badge/Telegram-%40HUGOVSYKAYA-2CA5E0?style=for-the-badge&logo=telegram&logoColor=white" alt="Telegram-канал"></a>
+  &nbsp;
+  <a href="https://github.com/dutow20162007-create/DashConnect/releases/latest"><img src="https://img.shields.io/badge/%D0%A1%D0%BA%D0%B0%D1%87%D0%B0%D1%82%D1%8C-.MSI-22C55E?style=for-the-badge&logo=windows&logoColor=white" alt="Скачать"></a>
+  &nbsp;
+  <img src="https://img.shields.io/badge/Windows-10%20%2F%2011%20x64-4B5563?style=for-the-badge&logo=windows&logoColor=white" alt="Windows 10/11">
+</p>
+
+<p align="center">
+  💬 Новости, обновления и поддержка — мой Telegram-канал <a href="https://t.me/HUGOVSYKAYA"><b>@HUGOVSYKAYA</b></a>
+</p>
 
 ---
+
+Нажми **Подключить** — и работают **Discord, YouTube, Telegram** и игровые серверы (Fortnite / Apex / Dead by Daylight / FACEIT). Приложение запускается от администратора, само подбирает рабочую стратегию обхода DPI и живёт в системном трее.
 
 ## Возможности
 
-- **Одна кнопка.** Один переключатель **Подключить / Отключить** поднимает всё.
-- **Автоподбор стратегии.** Перед запуском проверяет Discord/YouTube и подбирает самый быстрый рабочий пресет (ранний выход — не перебирает все).
-- **Игры без VPN.** Игровые серверы (порт 5222 + домены Epic/EA/Faceit/Behaviour) обходятся чистым `split` (без fake-пакетов, которые ломают игры). Сами игры идут напрямую — родной пинг.
-- **Само находит заблокированное.** `--hostlist-auto`: winws сам определяет и обходит любой заблокированный домен (самообучение).
-- **Telegram работает сам, в фоне.** При нажатии **Подключить** прога локально поднимает **WebSocket-мост** (open-source `tg-ws-proxy` от Flowseal): трафик Telegram оборачивается в WebSocket/TLS к **собственным дата-центрам Telegram** — для DPI это обычный HTTPS, без чужого сервера. В первый раз прога сама запускает Telegram (если он закрыт) и настраивает прокси в фоне (по возможности подтверждает без единого клика). Дальше Telegram подключается автоматически при каждом запуске. Если мост недоступен — резервно **Cloudflare WARP** (`warp-plus`) или рабочий MTProto-прокси.
-- **Шифрованный DNS (DoH).** При подключении система переключается на Cloudflare 1.1.1.1 с шифрованием (лечит DNS-подмену), при отключении возвращается **исходный** DNS. Защита от подмены на уровне провайдера.
-- **Установщик MSI + авто-обновление.** Ставится как обычная программа; при старте проверяет GitHub Releases и предлагает обновиться в один клик.
-- **Системный трей.** Сворачивание в трей, фоновая работа, без лишних консольных окон.
-
----
+- **Одна кнопка** — «Подключить / Отключить» поднимает всё.
+- **Автоподбор стратегии** — проверяет Discord/YouTube и берёт самый быстрый рабочий пресет.
+- **Игры без VPN** — игровой трафик (порт 5222 + домены Epic / EA / FACEIT) идёт напрямую, родной пинг.
+- **Telegram сам, в фоне** — локальный WebSocket-мост к серверам Telegram (для DPI это обычный HTTPS, без чужого сервера). Настраивается автоматически при первом подключении.
+- **Само находит заблокированное** — `--hostlist-auto`: обходит любой заблокированный домен.
+- **Шифрованный DNS (DoH)** — Cloudflare 1.1.1.1 при подключении, твой исходный DNS обратно при отключении.
+- **MSI-установщик + авто-обновление** — ставится как обычная программа и сама предлагает новые версии.
 
 ## Установка
 
-1. Скачайте свежий **`DashConnect-*.msi`** со страницы [Releases](https://github.com/dutow20162007-create/DashConnect/releases/latest).
-2. Запустите — установщик поставит приложение и все ассеты Zapret в `Program Files\Dash Connect`, создаст ярлыки.
-3. Запустите **Dash Connect от имени администратора** (нужно для WinDivert) → **Подключить**.
+1. Скачай свежий **`DashConnect-*.msi`** → [Releases](https://github.com/dutow20162007-create/DashConnect/releases/latest).
+2. Установи и запусти **от имени администратора** (нужно для WinDivert).
+3. Нажми **Подключить**.
 
-Обновления приходят автоматически: при запуске приложение проверяет наличие новой версии и предлагает установить.
-
----
-
-## Требования
-
-- Windows 10 / 11 (x64)
-- **Права администратора** (через UAC-манифест)
-
-Приложение **самодостаточно** — среда .NET и все ассеты Zapret (winws, WinDivert, списки, пресеты) уже внутри установщика. Ничего доустанавливать не нужно.
-
----
-
-## Build & run
-
-```powershell
-# from the project root
-.\build.ps1        # produces dist\DashConnect.exe (self-contained, single file)
-.\run.ps1          # builds if needed, then launches elevated (UAC)
-```
-
-`build.ps1` auto-detects the user-local .NET 8 SDK at `%USERPROFILE%\.dotnet` or the one on `PATH`.
-
-### Verify the engine (no admin, no network changes)
-
-```powershell
-& "$env:USERPROFILE\.dotnet\dotnet.exe" run --project src\DashConnect.SelfTest
-```
-
-`DashConnect.SelfTest` parses the real Zapret presets, exercises the proxy‑URL parser and the sing‑box config generator, and prints a PASS/FAIL report — safe to run from any shell.
-
----
+Обновления прилетают сами — при запуске приложение проверяет GitHub и предлагает поставить новую версию.
 
 ## Как это работает
 
-В РФ блокировка идёт двумя способами, и Dash Connect закрывает оба — **без VPN**.
+Блокировка в РФ идёт двумя способами, и Dash Connect закрывает оба — без VPN.
 
-### 1. DPI-десинхронизация (движок Zapret / winws)
+**1. DPI-десинхронизация ([Zapret](https://github.com/bol-van/zapret) / winws).** Провайдер читает имя сайта в TLS (SNI) и рвёт соединение. `winws.exe` через драйвер WinDivert фрагментирует и «портит» пакеты так, что DPI не опознаёт соединение, а реальный сервер собирает его правильно. Dash Connect разбирает готовые пресеты Zapret и запускает winws с проверенными аргументами; для игр (порт 5222) — чистый `split` без fake-пакетов, чтобы не ломать игру.
 
-Провайдер читает открытую часть TLS-соединения (имя сайта в ClientHello, SNI) и рвёт соединение (RST) или душит скорость. Zapret это обходит: `winws.exe` через драйвер **WinDivert** перехватывает исходящие пакеты и **десинхронизирует** их — фрагментирует ClientHello, подмешивает фейковые пакеты с «плохими» TTL/чек-суммами и т.п., так что DPI провайдера не может опознать соединение, а реальный сервер собирает его правильно.
+**2. Telegram — WebSocket-мост.** Telegram ходит к дата-центрам по IP (MTProto), обычный DPI-обход на нём не срабатывает. Поэтому прога поднимает локальный мост (`tg-ws-proxy`) на `127.0.0.1:1443`, который оборачивает Telegram в WebSocket/TLS к его собственным серверам — для провайдера это выглядит как обычный HTTPS. Настройка идёт в фоне при первом подключении, дальше Telegram подключается сам. Чужой сервер не нужен.
 
-Dash Connect не изобретает флаги — он **разбирает готовые пресеты Zapret** (`.bat`-файлы, раскрывая `%BIN%`/`%LISTS%`/`^!` как это делает cmd) и запускает `winws.exe` с проверенными наборами аргументов. Что настроено поверх:
+**3. Шифрованный DNS.** Провайдер может отдавать фальшивый IP на DNS-запрос. Dash Connect переключает систему на Cloudflare 1.1.1.1 с DoH (подменить нельзя), а при отключении возвращает исходный DNS.
 
-- **Discord / YouTube** — штатные пресеты `FAKE TLS AUTO` с fake-TLS десинхронизацией.
-- **Игры** (Fortnite / Apex / DBD / FACEIT) — игровые серверы используют **порт 5222** и чувствительны к fake-пакетам, поэтому для порта 5222 и доменов игровых сервисов (`lists/list-gameservers.txt`) используется **чистый `split`**. Сами игры идут напрямую — родной пинг.
-- **Само находит остальное** — `--hostlist-auto`: winws следит за соединениями и сам добавляет в обход любой домен, который блокируется (порог: 3 сбоя за минуту).
+> **Предел:** то, что блокируется по IP целиком, без прокси обойти нельзя — пакет просто не доходит. Всё остальное (DPI + авто-детект + DoH + мост Telegram) прога закрывает.
 
-**Автоподбор:** `StrategySelector` пробует пресеты по очереди, проверяя доступность Discord/YouTube, и останавливается на первом рабочем (ранний выход). `ZapretManager` держит процесс и подчищает `winws.exe` + службу WinDivert при остановке.
+## Благодарности
 
-### 2. Шифрованный DNS (DoH) — против DNS-подмены
+Dash Connect — это GUI-обёртка и автоматизация поверх открытых проектов. Вся заслуга по самому обходу DPI принадлежит их авторам:
 
-Второй механизм блокировки — провайдер отдаёт **фальшивый IP** на DNS-запрос. DPI тут бессилен. При подключении Dash Connect переключает систему на **Cloudflare 1.1.1.1 с DoH** (запросы шифруются — подменить нельзя), а при отключении **восстанавливает исходный DNS** (читая его из реестра, чтобы вернуть точь-в-точь). Есть защита от сбоя: если приложение упадёт с включённым DNS, при следующем запуске оно вернёт твой исходный.
+- **[Zapret](https://github.com/bol-van/zapret)** (@bol-van) — движок обхода DPI (winws + WinDivert).
+- **[zapret-discord-youtube](https://github.com/Flowseal/zapret-discord-youtube)** (@Flowseal) — сборка с готовыми пресетами (1.9.9c), на её основе кастомные пресеты.
+- **[tg-ws-proxy](https://github.com/Flowseal/tg-ws-proxy)** (@Flowseal) — WebSocket-мост для Telegram.
+- **[WinDivert](https://github.com/basil00/WinDivert)** (@basil00) — драйвер перехвата пакетов.
+- **[sing-box](https://github.com/SagerNet/sing-box)** (SagerNet) — опциональный VPN-туннель (по умолчанию выключен).
+- **[warp-plus](https://github.com/bepass-org/warp-plus)** (bepass-org) — Cloudflare WARP, резервный способ для Telegram.
 
-### Предел
-
-То, что блокируется **по IP целиком** (адрес вырезан из маршрутизации), обойти без прокси нельзя — пакет просто не доходит. Всё остальное (DPI + авто-детект + DoH) Dash Connect закрывает.
-
-**Telegram-приложение через DPI надёжно не обходится** — оно ходит к дата-центрам по IP (MTProto), и десинхронизация на нём не срабатывает. Поэтому для Telegram есть отдельный путь — **локальный WebSocket-мост** (`tg-ws-proxy` от Flowseal), включённый по умолчанию:
-
-- При **Подключить** прога запускает `tg-ws-proxy.exe` на `127.0.0.1:1443` — это локальный MTProto-прокси, который оборачивает трафик Telegram в **WebSocket поверх TLS** и ведёт его к **собственным доменам/дата-центрам Telegram**. Для DPI провайдера это выглядит как обычное HTTPS-соединение, поэтому проходит. **Чужой сервер не нужен** — мост ходит напрямую к инфраструктуре Telegram.
-- Telegram подключается к мосту через `tg://proxy?server=127.0.0.1&port=1443&secret=…`. Секрет постоянный (генерируется один раз и хранится в конфиге), поэтому настройка нужна только при **первом** подключении, а дальше Telegram помнит прокси и подключается сам.
-- Настройка идёт **в фоне**: прога сама запускает Telegram (если закрыт), открывает ссылку и по возможности подтверждает окно «Подключить прокси» через UI Automation (это безопасно — она нажимает кнопку по имени и **не трогает файлы Telegram**, так что сессия/вход не могут пострадать). Если Telegram нарисовал окно так, что кнопку не видно — останется один разовый клик. Правку `tdata` (которая убрала бы и его) намеренно не делаем — это рискует разлогинить.
-- Кнопка **«Переподключить Telegram»** (Настройки) повторяет настройку вручную. Если мост не поднялся (нет `tg-ws-proxy.exe`, занят порт) — резервно **Cloudflare WARP** (каскад scan → warp-in-warp → Psiphon), а если и он заблокирован — рабочий **MTProto-прокси** из авто-обновляемых списков. Мост и WARP живут, пока запущен Dash Connect.
+> Автор одного из проектов и хочешь изменить формулировку или убрать упоминание — открой issue.
 
 ---
 
-## Благодарности / На чём основано
-
-Dash Connect — это удобная GUI-обёртка и автоматизация поверх чужих открытых проектов. Вся заслуга по самому обходу DPI принадлежит их авторам:
-
-- **[Zapret](https://github.com/bol-van/zapret)** от **[@bol-van](https://github.com/bol-van)** — оригинальный движок обхода DPI (`winws.exe` + драйвер WinDivert). Это ядро, которое реально делает десинхронизацию. Лицензия зависит от компонентов проекта (в основном свободные).
-- **[zapret-discord-youtube](https://github.com/Flowseal/zapret-discord-youtube)** от **[@Flowseal](https://github.com/Flowseal)** — сборка Zapret с готовыми пресетами под Discord/YouTube (версия 1.9.9c). Именно её пресеты Dash Connect парсит и запускает; кастомные пресеты (`general (Dash Connect)`, блоки игр/авто-детекта) сделаны на их основе.
-- **[WinDivert](https://github.com/basil00/WinDivert)** от **@basil00** — драйвер перехвата пакетов, который использует Zapret.
-- **[sing-box](https://github.com/SagerNet/sing-box)** от **[SagerNet](https://github.com/SagerNet)** — опциональный TUN-туннель (для режима VPN, по умолчанию выключен).
-- **[tg-ws-proxy](https://github.com/Flowseal/tg-ws-proxy)** от **[@Flowseal](https://github.com/Flowseal)** — локальный MTProto-прокси, заворачивающий Telegram в WebSocket/TLS к дата-центрам Telegram. **Основной способ** для Telegram: собран как headless-`tg-ws-proxy.exe` и запускается прогой при подключении.
-- **[warp-plus](https://github.com/bepass-org/warp-plus)** от **[bepass-org](https://github.com/bepass-org)** — клиент Cloudflare WARP, резервный способ для Telegram (WARP — сервис Cloudflare).
-- MTProto-прокси списки: **[shablin/mtproto-proxy](https://github.com/shablin/mtproto-proxy)**, **[SoliSpirit/mtproto](https://github.com/SoliSpirit/mtproto)** — публичные авто-обновляемые списки для последнего fallback Telegram.
-
-**Что добавляет сам Dash Connect:** русский GUI в одну кнопку, автоподбор пресета, игровой `split` на порту 5222, авто-детект блокировок, авто-переключение на шифрованный DNS, автоматический запуск WebSocket-моста Telegram при подключении (с постоянным секретом и настройкой в один клик), системный трей, MSI-установщик и авто-обновление.
-
-> Если ты автор одного из проектов выше и хочешь изменить формулировку или убрать упоминание — открой issue.
-
----
-
-## Project layout
-
-```
-DashConnect.sln
-src/
-  DashConnect.Core/         # engine (net8.0) — no UI, no admin manifest, fully testable
-    Zapret/            #   StrategyProvider (batch parser), ZapretManager, HostlistManager
-    Diagnostics/       #   ConnectivityTester, StrategySelector
-    Singbox/           #   SingboxDownloader, SingboxConfigBuilder, ProxyUrlParser, GameRoutes, SingboxManager
-    Services/          #   AppOrchestrator (the Connect/Disconnect brain)
-    Config/ Models/ Util/ Logging/
-  DashConnect.App/          # WPF UI (net8.0-windows) — dark dashboard, custom toggles, tray
-  DashConnect.SelfTest/     # headless verification harness (net8.0 console)
-build.ps1  run.ps1
-```
-
-`DashConnect.Core` targets `net8.0` and carries no admin manifest, so its logic can be exercised head‑lessly. Only the WPF shell carries `requireAdministrator`.
-
----
-
-## Data & logs
-
-Everything the app writes lives in `%AppData%\DashConnect\`:
-
-| File | Purpose |
-|------|---------|
-| `config.json` | user settings |
-| `game-routes.json` | editable game routing signatures |
-| `singbox\sing-box.exe` + `config.json` | downloaded binary + generated tunnel config |
-| `logs\dashconnect.log` | rolling activity log |
-
-Open it quickly from **Settings → App data ▸**.
-
----
-
-## Troubleshooting
-
-- **“Administrator required”** — the app must be elevated. Use `run.ps1` or right‑click → *Run as administrator*.
-- **A strategy never makes Discord open** — enable **Deep scan** to trial every preset, or add the blocked domain under **Settings → Add blocked domain** (it appends to `list-general-user.txt`).
-- **Game routing does nothing** — confirm the proxy URL is a valid `vless://`/`ss://` link and that sing‑box downloaded (watch the log). Check `%AppData%\DashConnect\singbox\config.json`.
-- **`winws` won’t start** — a previous instance may hold WinDivert; Dash Connect reaps orphans automatically, but a reboot clears a wedged driver.
-
----
-
-## Notes on intent
-
-Dash Connect is a personal connectivity tool: it restores access to services that are throttled/geoblocked and keeps game traffic fast. It wraps two well‑known open‑source projects (Zapret, sing‑box) with a friendly GUI and automation. Use it in accordance with the terms of the services you connect to and your local law.
+<p align="center">
+  <a href="https://t.me/HUGOVSYKAYA"><b>t.me/HUGOVSYKAYA</b></a>
+</p>
