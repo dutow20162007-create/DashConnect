@@ -67,33 +67,37 @@ wix build $wxsPath -arch x64 -o $msi
 if ($LASTEXITCODE -ne 0) { throw "wix build failed" }
 
 # 7. Commit + push source (no co-author). "Nothing to commit" is fine.
-git add -A
-if ((git status --porcelain).Length -gt 0) {
+# NB: git/gh write warnings and progress (e.g. "LF will be replaced by CRLF", upload bars) to
+# stderr; under EAP=Stop PowerShell turns that into a terminating NativeCommandError even on exit 0.
+# Relax EAP for the rest of the script and gate on real exit codes instead.
+$ErrorActionPreference = 'SilentlyContinue'
+
+git add -A 2>&1 | Out-Null
+$dirty = ((git status --porcelain 2>$null) | Measure-Object).Count -gt 0
+if ($dirty) {
     $msg = if ($Message) { $Message } else { "build: publish $cur" }
-    git commit -m $msg | Out-Null
+    git commit -m $msg 2>&1 | Out-Null
     Write-Host "[publish] commit: $msg" -ForegroundColor Cyan
 } else {
     Write-Host "[publish] source unchanged" -ForegroundColor DarkGray
 }
-git push origin main
-if ($LASTEXITCODE -ne 0) { throw "git push failed" }
+git push origin main 2>&1 | Out-Null
+if ($LASTEXITCODE -ne 0) { throw "git push failed ($LASTEXITCODE)" }
 
 # 8. Release: update existing tag or create a new one.
-# NB: gh writes "release not found" to stderr for a missing tag; under EAP=Stop that would
-# terminate the script, so relax it just for the existence probe and read the real exit code.
 $tag = "v$cur"
-$ErrorActionPreference = 'SilentlyContinue'
 gh release view $tag > $null 2>&1
 $exists = ($LASTEXITCODE -eq 0)
-$ErrorActionPreference = 'Stop'
 if ($exists) {
-    gh release upload $tag $msi (Join-Path $root 'dist\DashConnect.exe') --clobber
+    gh release upload $tag $msi (Join-Path $root 'dist\DashConnect.exe') --clobber 2>&1 | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "gh release upload failed ($LASTEXITCODE)" }
     Write-Host "[publish] assets refreshed on release $tag" -ForegroundColor Green
 } else {
-    gh release create $tag $msi (Join-Path $root 'dist\DashConnect.exe') --title "Dash Connect $cur" --notes "Build $cur."
+    gh release create $tag $msi (Join-Path $root 'dist\DashConnect.exe') --title "Dash Connect $cur" --notes "Build $cur." 2>&1 | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "gh release create failed ($LASTEXITCODE)" }
     Write-Host "[publish] created release $tag" -ForegroundColor Green
 }
 # Safety: flaky GitHub uploads can leave the release as a draft — force it published.
-gh release edit $tag --draft=false 2>$null
+gh release edit $tag --draft=false 2>&1 | Out-Null
 
 Write-Host "[publish] DONE -> https://github.com/dutow20162007-create/DashConnect/releases/tag/$tag" -ForegroundColor Green
