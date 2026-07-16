@@ -4,3 +4,9 @@ easylist-downloads.adblockplus.org
 abp.telemetry.adblockplus.org
 googleads.g.doubleclick.net
 static.doubleclick.net
+browsec-uninstall.s3-website.eu-central-1.amazonaws.com
+lt16.rapidstaticserve.cc
+darkreader.org
+tracker.ipv6tracker.org
+open.trackerlist.xyz
+tracker.bz

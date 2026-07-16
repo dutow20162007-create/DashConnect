@@ -22,6 +22,7 @@ public sealed class AppOrchestrator : IAsyncDisposable
     private readonly StrategySelector _selector;
     private readonly TgWsProxyManager _tgws = new();
     private readonly TelegramFixer _telegramFixer = new();
+    private readonly AmneziaWgManager _amnezia = new();
 
     private CancellationTokenSource? _cts;
     private readonly object _ctsLock = new();
@@ -37,7 +38,8 @@ public sealed class AppOrchestrator : IAsyncDisposable
     public ZapretStrategy? ActiveStrategy => _zapret.Current;
     public bool DpiActive => _zapret.IsRunning;
     public bool GameRoutingActive => _singbox.IsRunning;
-    public bool IsConnected => _zapret.IsRunning || _singbox.IsRunning;
+    public bool AmneziaActive => _amnezia.IsRunning;
+    public bool IsConnected => _zapret.IsRunning || _singbox.IsRunning || _amnezia.IsRunning;
 
     /// <summary>The Telegram WebSocket bridge is running (tg-ws-proxy on 127.0.0.1:1443).</summary>
     public bool TelegramProxyActive => _tgws.IsRunning;
@@ -130,10 +132,12 @@ public sealed class AppOrchestrator : IAsyncDisposable
                 StrategySelected?.Invoke(_zapret.Current);
             }
 
-            // ---- Subsystem B: VPN (sing-box tunnel via subscription) ----
+            // ---- Subsystem B: VPN (sing-box subscription OR AmneziaWG .conf) ----
             string? vpnError = null;
             if (config.VpnEnabled)
-                vpnError = await StartVpnAsync(config, ct);
+                vpnError = config.VpnKind == VpnKind.Amnezia
+                    ? await StartAmneziaAsync(config, ct)
+                    : await StartVpnAsync(config, ct);
 
             // ---- Subsystem C: encrypted DNS (defeats DNS poisoning that DPI can't reach) ----
             // Applied whenever the user wants it — not gated on winws timing, so it never silently
@@ -162,7 +166,7 @@ public sealed class AppOrchestrator : IAsyncDisposable
             finalReport = await _tester.RunDefaultAsync(ct);
             DiagnosticsUpdated?.Invoke(finalReport);
 
-            var connected = _zapret.IsRunning || _singbox.IsRunning || (needZapret && directOpen);
+            var connected = _zapret.IsRunning || _singbox.IsRunning || _amnezia.IsRunning || (needZapret && directOpen);
             SetState(connected ? EngineState.Running : EngineState.Error);
             var summary = BuildSummary(finalReport, directOpen);
             if (config.CleanDnsEnabled)
@@ -246,11 +250,17 @@ public sealed class AppOrchestrator : IAsyncDisposable
         if (config.TelegramFixEnabled)
         {
             var secret = EnsureTelegramSecret(config);
-            if (await _tgws.StartAsync(config.ZapretRoot, secret, status, ct))
+            // Serialize the bridge start with Connect/Disconnect through the same gate — otherwise this
+            // (from the button) races Subsystem D / StopAll mutating the shared _tgws process handle.
+            bool ok;
+            await _opGate.WaitAsync(ct);
+            try { ok = await _tgws.StartAsync(config.ZapretRoot, secret, status, ct); }
+            finally { _opGate.Release(); }
+            if (ok)
                 return new TelegramFixResult(true, _tgws.TgLink,
                     "Мост Telegram поднят. В открывшемся Telegram нажми «Подключить прокси» — и всё.");
         }
-        return await _telegramFixer.FixAsync(status, ct);
+        return await _telegramFixer.FixAsync(status, ct); // WARP/MTProto fallback — kept outside the gate (can be slow)
     }
 
     /// <summary>Returns the persisted MTProto secret, generating and storing one on first use.</summary>
@@ -259,6 +269,21 @@ public sealed class AppOrchestrator : IAsyncDisposable
         if (string.IsNullOrWhiteSpace(config.TgWsProxySecret) || config.TgWsProxySecret.Length != 32)
             config.TgWsProxySecret = TgWsProxyManager.NewSecret();
         return config.TgWsProxySecret;
+    }
+
+    private async Task<string?> StartAmneziaAsync(AppConfig config, CancellationToken ct)
+    {
+        var info = AmneziaWgManager.Parse(config.AmneziaConfig);
+        if (!info.Valid)
+        {
+            Status($"Конфиг Amnezia неверный: {info.Error}");
+            return $"конфиг Amnezia: {info.Error}";
+        }
+        Status("Запускаю AmneziaWG…");
+        var ok = await _amnezia.StartAsync(config.ZapretRoot, config.AmneziaConfig, Status, ct);
+        if (!ok) return "AmneziaWG не запустился (см. журнал)";
+        Status($"AmneziaWG активен: {info.Endpoint}");
+        return null;
     }
 
     public async Task DisconnectAsync()
@@ -272,6 +297,13 @@ public sealed class AppOrchestrator : IAsyncDisposable
             SetState(EngineState.Stopped);
             Status("Отключено");
             StrategySelected?.Invoke(null);
+        }
+        catch (Exception ex)
+        {
+            // Never leave the UI stuck on the old state if teardown throws — always settle to Stopped.
+            Log.Error("orchestrator", "disconnect failed", ex);
+            SetState(EngineState.Stopped);
+            Status($"Отключено (с ошибкой: {ex.Message})");
         }
         finally
         {
@@ -295,10 +327,12 @@ public sealed class AppOrchestrator : IAsyncDisposable
             _dnsApplied = false;
         }
         _tgws.Stop();
+        await _amnezia.StopAsync(ct);
         await _zapret.StopAsync(ct);
         await _singbox.StopAsync(ct);
         await ZapretManager.KillOrphansAsync(ct);
         await SingboxManager.KillOrphansAsync(ct);
+        await AmneziaWgManager.KillOrphansAsync(); // belt-and-suspenders, like the other engines
     }
 
     private static string BuildSummary(DiagnosticsReport report, bool directOpen)
@@ -326,11 +360,20 @@ public sealed class AppOrchestrator : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
-        try { await StopAllAsync(CancellationToken.None); } catch { }
-        await _zapret.DisposeAsync();
-        await _singbox.DisposeAsync();
-        await _tgws.DisposeAsync();
-        await _telegramFixer.DisposeAsync();
+        // Acquire the op-gate so we never dispose a manager's semaphore out from under an in-flight
+        // Connect (which would throw ObjectDisposedException into that connect).
+        bool acquired = false;
+        try { await _opGate.WaitAsync(); acquired = true; } catch { }
+        try
+        {
+            try { await StopAllAsync(CancellationToken.None); } catch { }
+            await _zapret.DisposeAsync();
+            await _singbox.DisposeAsync();
+            await _tgws.DisposeAsync();
+            await _telegramFixer.DisposeAsync();
+            await _amnezia.DisposeAsync();
+        }
+        finally { if (acquired) { try { _opGate.Release(); } catch { } } }
         _opGate.Dispose();
     }
 }

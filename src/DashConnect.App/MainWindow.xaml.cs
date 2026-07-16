@@ -50,6 +50,18 @@ public partial class MainWindow : Window
     private void Minimize_Click(object sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;
     private void Close_Click(object sender, RoutedEventArgs e) => Close();
 
+    // Opens the Telegram channel link in the default handler (Telegram app or browser).
+    private void Hyperlink_RequestNavigate(object sender, System.Windows.Navigation.RequestNavigateEventArgs e)
+    {
+        try
+        {
+            System.Diagnostics.Process.Start(
+                new System.Diagnostics.ProcessStartInfo(e.Uri.AbsoluteUri) { UseShellExecute = true });
+        }
+        catch { /* no handler for the URL — ignore */ }
+        e.Handled = true;
+    }
+
     // ---- data context wiring ----
     private void OnDataContextChanged(object sender, DependencyPropertyChangedEventArgs e)
     {

@@ -11,6 +11,10 @@ public sealed class ProbeTarget
     public bool Https { get; init; } = true;       // attempt an HTTPS request
     public bool Critical { get; init; } = true;    // must be Open for a strategy to be accepted
     public bool TcpOnly { get; init; }             // MTProto/raw DC: TCP connect IS the probe (no TLS)
+
+    public string? HttpPath { get; init; }         // GET path for HTTPS probes (default "/")
+    public bool RequireHttpOk { get; init; }       // Open requires a real 2xx/3xx status, not just a handshake
+    public bool RequireHello { get; init; }        // gateway: require Discord's op-10 Hello frame, not just HTTP 101
 }
 
 /// <summary>Outcome of probing a single host.</summary>

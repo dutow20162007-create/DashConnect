@@ -3,6 +3,15 @@ namespace DashConnect.Core.Config;
 /// <summary>Game-filter mode for Zapret (whether winws also desyncs high game ports).</summary>
 public enum GameFilterMode { Disabled, All, Tcp, Udp }
 
+/// <summary>Which engine powers the VPN toggle.</summary>
+public enum VpnKind
+{
+    /// <summary>sing-box tunnel from a vless://…/subscription link (smart-split or full).</summary>
+    Singbox,
+    /// <summary>AmneziaWG (obfuscated WireGuard) from a pasted .conf — always a full tunnel.</summary>
+    Amnezia,
+}
+
 /// <summary>Persisted user settings. Serialized to %AppData%\DashConnect\config.json.</summary>
 public sealed class AppConfig
 {
@@ -39,12 +48,15 @@ public sealed class AppConfig
     /// </summary>
     public bool CleanDnsEnabled { get; set; } = true;
 
-    // ---- VPN (sing-box tunnel via subscription) ----
+    // ---- VPN (sing-box subscription tunnel OR AmneziaWG .conf) ----
 
-    /// <summary>Enable the sing-box VPN tunnel (routes traffic through the selected server).</summary>
+    /// <summary>Enable the VPN tunnel (routes traffic through the selected server / config).</summary>
     public bool VpnEnabled { get; set; }
 
-    /// <summary>true = ТУННЕЛЬ (route everything); false = ПРОКСИ (smart split, lowest ping).</summary>
+    /// <summary>Which engine the VPN toggle uses: a sing-box link/subscription, or an AmneziaWG .conf.</summary>
+    public VpnKind VpnKind { get; set; } = VpnKind.Singbox;
+
+    /// <summary>true = ТУННЕЛЬ (route everything); false = ПРОКСИ (smart split, lowest ping). sing-box only.</summary>
     public bool VpnFull { get; set; }
 
     /// <summary>Subscription URL, or a single vless://ss://vmess://trojan:// link.</summary>
@@ -52,6 +64,9 @@ public sealed class AppConfig
 
     /// <summary>Name of the profile selected from the subscription.</summary>
     public string? SelectedProfileName { get; set; }
+
+    /// <summary>Raw AmneziaWG .conf text (used when VpnKind == Amnezia). Kept so it survives restarts.</summary>
+    public string AmneziaConfig { get; set; } = "";
 
     // ---- Telegram (WebSocket bridge — Flowseal tg-ws-proxy) ----
 

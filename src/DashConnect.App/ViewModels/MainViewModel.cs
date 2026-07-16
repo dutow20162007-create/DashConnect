@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Diagnostics;
+using System.IO;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
@@ -64,6 +65,8 @@ public sealed class MainViewModel : ViewModelBase
         AddVpnAppCommand = new RelayCommand(AddVpnApp, () => !string.IsNullOrWhiteSpace(NewAppInput));
         PickVpnAppCommand = new RelayCommand(PickVpnApp);
         RemoveVpnAppCommand = new RelayCommand(RemoveVpnApp);
+        PickAmneziaFileCommand = new RelayCommand(PickAmneziaFile);
+        ClearAmneziaCommand = new RelayCommand(() => AmneziaConfig = "");
         OpenDataFolderCommand = new RelayCommand(() => OpenPath(Paths.AppDataDir));
         OpenZapretFolderCommand = new RelayCommand(() => OpenPath(_config.ZapretRoot));
         ClearLogCommand = new RelayCommand(() => LogLines.Clear());
@@ -93,6 +96,8 @@ public sealed class MainViewModel : ViewModelBase
     public ICommand AddVpnAppCommand { get; }
     public ICommand PickVpnAppCommand { get; }
     public ICommand RemoveVpnAppCommand { get; }
+    public ICommand PickAmneziaFileCommand { get; }
+    public ICommand ClearAmneziaCommand { get; }
     public ICommand OpenDataFolderCommand { get; }
     public ICommand OpenZapretFolderCommand { get; }
     public ICommand ClearLogCommand { get; }
@@ -229,6 +234,49 @@ public sealed class MainViewModel : ViewModelBase
                 OnPropertyChanged(nameof(ProxyModeBrush));
                 OnPropertyChanged(nameof(TunnelModeBrush));
             }
+        }
+    }
+
+    /// <summary>ON → the VPN toggle uses the AmneziaWG .conf instead of the sing-box link.
+    /// Enabling it also switches on the VPN so the choice takes effect on the next connect.</summary>
+    public bool UseAmnezia
+    {
+        get => _config.VpnKind == VpnKind.Amnezia;
+        set
+        {
+            var kind = value ? VpnKind.Amnezia : VpnKind.Singbox;
+            if (_config.VpnKind == kind) return;
+            _config.VpnKind = kind;
+            if (value && !_config.VpnEnabled) { _config.VpnEnabled = true; OnPropertyChanged(nameof(VpnEnabled)); }
+            OnPropertyChanged();
+            Save();
+        }
+    }
+
+    /// <summary>Raw AmneziaWG .conf text (pasted or loaded from a file).</summary>
+    public string AmneziaConfig
+    {
+        get => _config.AmneziaConfig;
+        set
+        {
+            if (_config.AmneziaConfig == value) return;
+            _config.AmneziaConfig = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(AmneziaStatus));
+            Save();
+        }
+    }
+
+    /// <summary>Human-readable validation of the pasted .conf (endpoint / error).</summary>
+    public string AmneziaStatus
+    {
+        get
+        {
+            if (string.IsNullOrWhiteSpace(_config.AmneziaConfig)) return "конфиг не загружен";
+            var info = DashConnect.Core.Network.AmneziaWgManager.Parse(_config.AmneziaConfig);
+            return info.Valid
+                ? $"✓ {info.Endpoint} · {(info.Obfuscated ? "AmneziaWG" : "WireGuard")}"
+                : $"✗ {info.Error}";
         }
     }
 
@@ -449,6 +497,27 @@ public sealed class MainViewModel : ViewModelBase
             GameRoutesStore.SaveUserApps(VpnApps);
             StatusText = $"«{s}» убрана из VPN — переподключитесь, чтобы применить";
         }
+    }
+
+    private void PickAmneziaFile()
+    {
+        var dlg = new Microsoft.Win32.OpenFileDialog
+        {
+            Title = "Выберите конфиг Amnezia (.conf)",
+            Filter = "AmneziaWG / WireGuard (*.conf)|*.conf|Все файлы (*.*)|*.*",
+            CheckFileExists = true,
+        };
+        try { dlg.InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile); } catch { }
+
+        if (dlg.ShowDialog() != true) return;
+        try
+        {
+            AmneziaConfig = File.ReadAllText(dlg.FileName);
+            var info = DashConnect.Core.Network.AmneziaWgManager.Parse(AmneziaConfig);
+            if (info.Valid) { UseAmnezia = true; StatusText = $"Конфиг Amnezia загружен: {info.Endpoint}"; }
+            else StatusText = $"Конфиг Amnezia неверный: {info.Error}";
+        }
+        catch (Exception ex) { StatusText = $"Не удалось прочитать файл: {ex.Message}"; }
     }
 
     private static void OpenPath(string path)

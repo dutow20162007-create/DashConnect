@@ -18,6 +18,14 @@ public sealed class SingboxDownloader
     private static readonly Regex AssetPattern =
         new(@"^sing-box-[\d.]+-windows-amd64\.zip$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
+    // Pinned, verified-good version downloaded DIRECTLY from github.com (not api.github.com, which is
+    // widely blocked on RU ISPs — that block is why the VPN "stopped working": no binary could be
+    // fetched). Pinning also freezes the config schema this app generates (validated with
+    // `sing-box check` against this exact version), so a future sing-box release can't silently break it.
+    private const string PinnedVersion = "1.13.14";
+    private static string PinnedUrl =>
+        $"https://github.com/SagerNet/sing-box/releases/download/v{PinnedVersion}/sing-box-{PinnedVersion}-windows-amd64.zip";
+
     private static readonly HttpClient Http = CreateClient();
 
     private static HttpClient CreateClient()
@@ -49,34 +57,23 @@ public sealed class SingboxDownloader
             Log.Warn("singbox", "existing binary is unusable, re-downloading");
         }
 
+        // 1) Pinned direct download from github.com — RU-reachable (avoids the blocked api.github.com)
+        //    and schema-frozen. This is the path that fixes "VPN stopped working".
+        var pinned = await TryFetchAsync(PinnedUrl, $"sing-box {PinnedVersion}", onProgress, ct);
+        if (pinned is not null) return pinned;
+
+        // 2) Fallback: resolve the latest release via api.github.com (works where the API isn't blocked).
         try
         {
-            onProgress("Resolving latest sing-box release…");
+            onProgress("Resolving sing-box release…");
             var (assetUrl, tag) = await ResolveLatestAssetAsync(ct);
             if (assetUrl is null)
             {
                 Log.Error("singbox", "no windows-amd64 asset found in latest release");
+                onProgress("sing-box: не удалось скачать (проверьте интернет / включите обход)");
                 return null;
             }
-
-            onProgress($"Downloading sing-box {tag}…");
-            var zipPath = Path.Combine(Paths.SingboxDir, "sing-box.zip");
-            await DownloadFileAsync(assetUrl, zipPath, ct);
-
-            onProgress("Extracting sing-box…");
-            ExtractExe(zipPath);
-            TryDelete(zipPath);
-
-            if (!IsInstalled)
-            {
-                Log.Error("singbox", "sing-box.exe not found inside downloaded archive");
-                return null;
-            }
-
-            var v = await GetVersionAsync(ct);
-            onProgress($"sing-box ready ({v ?? tag})");
-            Log.Info("singbox", $"installed sing-box {v ?? tag}");
-            return Paths.SingboxExe;
+            return await TryFetchAsync(assetUrl, $"sing-box {tag}", onProgress, ct);
         }
         catch (Exception ex)
         {
@@ -84,6 +81,30 @@ public sealed class SingboxDownloader
             onProgress($"sing-box download failed: {ex.Message}");
             return null;
         }
+    }
+
+    /// <summary>Downloads + extracts + verifies a sing-box zip from one URL. Returns the exe path or null.</summary>
+    private async Task<string?> TryFetchAsync(string url, string label, Action<string> onProgress, CancellationToken ct)
+    {
+        try
+        {
+            onProgress($"Downloading {label}…");
+            var zipPath = Path.Combine(Paths.SingboxDir, "sing-box.zip");
+            await DownloadFileAsync(url, zipPath, ct);
+
+            onProgress("Extracting sing-box…");
+            ExtractExe(zipPath);
+            TryDelete(zipPath);
+
+            if (!IsInstalled) { Log.Error("singbox", "sing-box.exe not found inside archive"); return null; }
+
+            var v = await GetVersionAsync(ct);
+            onProgress($"sing-box ready ({v ?? label})");
+            Log.Info("singbox", $"installed {v ?? label}");
+            return Paths.SingboxExe;
+        }
+        catch (OperationCanceledException) { throw; }
+        catch (Exception ex) { Log.Warn("singbox", $"fetch {label} failed: {ex.Message}"); return null; }
     }
 
     private static async Task<(string? url, string tag)> ResolveLatestAssetAsync(CancellationToken ct)

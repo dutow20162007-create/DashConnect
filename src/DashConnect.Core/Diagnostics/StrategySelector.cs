@@ -15,6 +15,8 @@ public sealed class StrategySelector
     private readonly ZapretManager _zapret;
     private readonly ConnectivityTester _tester;
 
+    private const int WinwsWarmupMs = 800;
+
     public StrategySelector(ZapretManager zapret, ConnectivityTester tester)
     {
         _zapret = zapret;
@@ -63,13 +65,15 @@ public sealed class StrategySelector
             DiagnosticsReport? report = null;
             using (var candCts = CancellationTokenSource.CreateLinkedTokenSource(ct))
             {
-                candCts.CancelAfter(TimeSpan.FromSeconds(9));
+                // Warmup + 2 strict rounds (WS+Hello upgrade, two real GETs) need real headroom.
+                candCts.CancelAfter(TimeSpan.FromSeconds(24));
                 try
                 {
                     if (await _zapret.StartAsync(zapretRoot, strategy, candCts.Token))
                     {
-                        await Task.Delay(400, candCts.Token); // let WinDivert filters settle
-                        report = await _tester.RunSelectionAsync(candCts.Token);
+                        await _tester.WarmupAsync(candCts.Token);          // prime WinDivert filters, discard result
+                        await Task.Delay(WinwsWarmupMs, candCts.Token);    // let per-flow desync state settle
+                        report = await _tester.RunSelectionAsync(candCts.Token); // 2 strict rounds, worst-of
                     }
                     else
                     {
@@ -99,9 +103,11 @@ public sealed class StrategySelector
 
         onFraction?.Invoke(1);
 
-        // 3. Nobody was perfect — take the one that opened the most critical services (then fastest).
+        // 3. Rank: a preset that carries the Discord gateway (op-10 Hello) always beats one that
+        //    can't, even if the latter is faster — that gateway is exactly what users need.
         var best = evaluations
-            .OrderByDescending(e => CriticalOpen(e.Report))
+            .OrderByDescending(e => GatewayWorks(e.Report))
+            .ThenByDescending(e => CriticalOpen(e.Report))
             .ThenByDescending(e => e.Report.TotalScore)
             .ThenBy(e => e.Report.AverageHandshakeMs)
             .FirstOrDefault();
@@ -112,10 +118,17 @@ public sealed class StrategySelector
             return new SelectionResult(null, baseline, evaluations, DirectAlreadyOpen: false);
         }
 
-        onProgress($"Выбрана «{best.Strategy.Name}» (лучшая из {evaluations.Count})");
+        // Be honest when even the best preset didn't truly clear Discord's gateway.
+        onProgress(GatewayWorks(best.Report)
+            ? $"Выбрана «{best.Strategy.Name}» (лучшая из {evaluations.Count})"
+            : $"Выбрана «{best.Strategy.Name}», но Discord прошёл не полностью — попробуйте другой сервер/провайдера");
         return new SelectionResult(best.Strategy, baseline, evaluations, DirectAlreadyOpen: false);
     }
 
     private static int CriticalOpen(DiagnosticsReport r)
         => r.Results.Count(x => x.Critical && x.Verdict == ServiceVerdict.Open);
+
+    /// <summary>True when the Discord gateway WebSocket (HTTP 101 + op-10 Hello) actually came up.</summary>
+    private static bool GatewayWorks(DiagnosticsReport r)
+        => r.Results.Any(x => x.Host == "gateway.discord.gg" && x.Verdict == ServiceVerdict.Open);
 }

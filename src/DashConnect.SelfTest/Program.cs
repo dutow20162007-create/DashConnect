@@ -1,5 +1,6 @@
 using System.Text.Json;
 using DashConnect.Core.Config;
+using DashConnect.Core.Network;
 using DashConnect.Core.Singbox;
 using DashConnect.Core.Zapret;
 
@@ -149,6 +150,35 @@ if (pVless is not null)
         Check(final == "direct", "ПРОКСИ: route.final = direct (split tunnel, low ping)");
     }
 }
+Console.WriteLine();
+
+// ---- 6. AmneziaWG (.conf) parser ----
+Console.WriteLine("[6] AmneziaWG config parser");
+const string awgConf = """
+[Interface]
+PrivateKey = 4PbjXzv5iMj9r6hKTczUw5CiVhiqKb8pZMT+w6R/okI=
+Address = 10.1.5.201/32
+Jc = 9
+S1 = 110
+H1 = 7291435-486117520
+I1 = <b 0x0003><r 2>
+
+[Peer]
+PublicKey = FRJV+oOoYMa0qi0a317UtdLzLkYz8t6GV/pFAsFJ5mc=
+AllowedIPs = 0.0.0.0/0, ::/0
+Endpoint = list-crept-city-3a87a8.relay7ai.net:50001
+""";
+var awg = AmneziaWgManager.Parse(awgConf);
+Check(awg.Valid, "valid AmneziaWG .conf accepted");
+Check(awg.Endpoint == "list-crept-city-3a87a8.relay7ai.net:50001", "endpoint extracted");
+Check(awg.Obfuscated, "AmneziaWG obfuscation params detected (Jc/S1/H1)");
+
+const string plainWg = "[Interface]\nPrivateKey = k\n\n[Peer]\nEndpoint = 1.2.3.4:51820\nAllowedIPs = 0.0.0.0/0";
+var wg = AmneziaWgManager.Parse(plainWg);
+Check(wg.Valid && !wg.Obfuscated, "plain WireGuard parsed, not flagged obfuscated");
+
+Check(!AmneziaWgManager.Parse("").Valid, "empty config rejected");
+Check(!AmneziaWgManager.Parse("[Interface]\nPrivateKey = k").Valid, "config without [Peer]/Endpoint rejected");
 Console.WriteLine();
 
 Console.WriteLine(failures == 0 ? "ALL CHECKS PASSED" : $"{failures} CHECK(S) FAILED");

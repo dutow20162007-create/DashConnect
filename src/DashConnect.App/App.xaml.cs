@@ -47,6 +47,9 @@ public partial class App : Application
             // The manifest already forces elevation, but if we ever start unelevated (manifest
             // stripped, launched via an odd host) relaunch OURSELVES elevated through UAC and exit —
             // so the app always ends up running as administrator without the user doing anything.
+            // Release the single-instance mutex FIRST: otherwise the elevated copy can start while we
+            // still hold it, see created==false ("already running"), and exit — leaving no window.
+            try { _mutex?.ReleaseMutex(); _mutex?.Dispose(); _mutex = null; } catch { }
             try
             {
                 var exe = Environment.ProcessPath;
@@ -85,6 +88,10 @@ public partial class App : Application
         // reverted (e.g. it was killed). Restore the user's original resolver before anything else.
         if (DashConnect.Core.Network.DnsManager.HasPendingBackup)
             _ = DashConnect.Core.Network.DnsManager.RevertAsync();
+
+        // Crash recovery: remove any AmneziaWG tunnel left running by a killed prior session (the app
+        // isn't connected at startup, so a lingering full-tunnel service would otherwise trap traffic).
+        _ = DashConnect.Core.Network.AmneziaWgManager.KillOrphansAsync();
 
         // Portable install: if the configured Zapret folder is gone (fresh MSI install on a new PC),
         // fall back to the copy shipped next to the exe (installed as <app>\zapret).
@@ -186,6 +193,7 @@ public partial class App : Application
                 }
                 await DashConnect.Core.Network.WarpManager.KillOrphansAsync(); // stop the WARP relay on exit
                 await DashConnect.Core.Network.TgWsProxyManager.KillOrphansAsync(); // stop the Telegram bridge on exit
+                await DashConnect.Core.Network.AmneziaWgManager.KillOrphansAsync(); // remove the AmneziaWG tunnel on exit
             }
             catch (Exception ex) { Log.Warn("app", $"очистка при выходе: {ex.Message}"); }
             finally

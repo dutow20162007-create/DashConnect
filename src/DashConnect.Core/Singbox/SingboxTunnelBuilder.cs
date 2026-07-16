@@ -52,7 +52,14 @@ public static class SingboxTunnelBuilder
         if (outbound is null)
             return new Result(false, err ?? "не удалось разобрать сервер", null);
 
-        var rules = new List<object> { new Dictionary<string, object?> { ["action"] = "sniff" } };
+        var rules = new List<object>
+        {
+            new Dictionary<string, object?> { ["action"] = "sniff" },
+            // Hijack the OS's DNS queries into sing-box's own DNS engine (the `dns` block below).
+            // WITHOUT this, in a full tunnel DNS has no resolver, so nothing resolves and no traffic
+            // flows even though the tunnel reports "up" — this was the "VLESS stopped working" bug.
+            new Dictionary<string, object?> { ["protocol"] = "dns", ["action"] = "hijack-dns" },
+        };
 
         // Never tunnel local/LAN traffic.
         rules.Add(new Dictionary<string, object?> { ["ip_is_private"] = true, ["outbound"] = "direct" });
@@ -79,6 +86,26 @@ public static class SingboxTunnelBuilder
         var config = new Dictionary<string, object?>
         {
             ["log"] = new Dictionary<string, object?> { ["level"] = "warn", ["timestamp"] = true },
+            // DNS engine for the tunnel. remote-dns (DoH, through the proxy) resolves everything;
+            // bootstrap-dns (plain UDP, direct) resolves the DoH server's own name and is the domain
+            // resolver so it never deadlocks inside the tunnel. Required by sing-box 1.12+.
+            ["dns"] = new Dictionary<string, object?>
+            {
+                ["servers"] = new object[]
+                {
+                    new Dictionary<string, object?>
+                    {
+                        ["type"] = "https", ["tag"] = "remote-dns", ["server"] = "1.1.1.1",
+                        ["detour"] = SubscriptionManager.OutboundTag, ["domain_resolver"] = "bootstrap-dns",
+                    },
+                    new Dictionary<string, object?>
+                    {
+                        ["type"] = "udp", ["tag"] = "bootstrap-dns", ["server"] = "1.1.1.1", ["detour"] = "direct",
+                    },
+                },
+                ["final"] = "remote-dns",
+                ["strategy"] = "prefer_ipv4",
+            },
             ["inbounds"] = new object[]
             {
                 new Dictionary<string, object?>
@@ -101,6 +128,7 @@ public static class SingboxTunnelBuilder
             ["route"] = new Dictionary<string, object?>
             {
                 ["auto_detect_interface"] = true,
+                ["default_domain_resolver"] = "bootstrap-dns", // required by sing-box 1.12+
                 ["final"] = final,
                 ["rules"] = rules,
             },

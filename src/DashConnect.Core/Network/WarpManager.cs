@@ -102,17 +102,29 @@ public sealed class WarpManager : IAsyncDisposable
     {
         try
         {
-            _proc = Process.Start(new ProcessStartInfo(exe, args)
+            _proc = new Process
             {
-                CreateNoWindow = true,
-                UseShellExecute = false,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                WorkingDirectory = Dir,
-            });
-            return _proc is not null;
+                StartInfo = new ProcessStartInfo(exe, args)
+                {
+                    CreateNoWindow = true,
+                    UseShellExecute = false,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    WorkingDirectory = Dir,
+                },
+                EnableRaisingEvents = true,
+            };
+            // warp-plus logs continuously; if we redirect the pipes but never read them the OS pipe
+            // buffer fills and the process BLOCKS on its next write (the relay silently dies while
+            // IsRunning still reports true). Drain both streams.
+            _proc.OutputDataReceived += (_, _) => { };
+            _proc.ErrorDataReceived += (_, _) => { };
+            if (!_proc.Start()) { _proc = null; return false; }
+            _proc.BeginOutputReadLine();
+            _proc.BeginErrorReadLine();
+            return true;
         }
-        catch (Exception ex) { Log.Warn("warp", $"launch: {ex.Message}"); return false; }
+        catch (Exception ex) { Log.Warn("warp", $"launch: {ex.Message}"); _proc = null; return false; }
     }
 
     public void Stop()

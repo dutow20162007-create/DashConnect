@@ -31,7 +31,7 @@ public sealed class ConnectivityTester
     {
         new() { Label = "Discord",         Host = "discord.com",                Https = true,  Critical = true },
         new() { Label = "Discord (шлюз)",  Host = "gateway.discord.gg",         WebSocket = true,
-                WebSocketPath = "/?v=10&encoding=json", Https = false, Critical = true },
+                WebSocketPath = "/?v=10&encoding=json", RequireHello = true, Https = false, Critical = true },
         new() { Label = "YouTube",         Host = "www.youtube.com",            Https = true,  Critical = true },
         new() { Label = "YouTube CDN",     Host = "redirector.googlevideo.com", Https = true,  Critical = false },
         // Telegram servers over TLS (SNI) — reachable through the DPI bypass, so this shows a real ping
@@ -44,12 +44,20 @@ public sealed class ConnectivityTester
     /// <summary>Port the bundled tg-ws-proxy bridge listens on (kept in sync with TgWsProxyManager.Port).</summary>
     public const int TgBridgePort = 1443;
 
-    /// <summary>Fast critical-only set (TLS handshake only) used to score strategies quickly.</summary>
+    /// <summary>
+    /// Strict critical set used to SCORE strategies. Each entry exercises the layer that actually
+    /// breaks for users — a real gateway WebSocket (HTTP 101 + op-10 Hello), the Discord REST API
+    /// through the CDN (real 2xx), and YouTube (real 2xx/3xx). A bare TLS handshake to discord.com
+    /// (a Cloudflare host often not even blocked) is no longer enough to "win" the sweep.
+    /// </summary>
     public static IReadOnlyList<ProbeTarget> SelectionTargets { get; } = new List<ProbeTarget>
     {
-        new() { Label = "Discord",        Host = "discord.com",        Https = false, Critical = true },
-        new() { Label = "YouTube",        Host = "www.youtube.com",    Https = false, Critical = true },
-        new() { Label = "Discord (шлюз)", Host = "gateway.discord.gg", Https = false, Critical = true },
+        new() { Label = "Discord (шлюз)", Host = "gateway.discord.gg", WebSocket = true,
+                WebSocketPath = "/?v=10&encoding=json", RequireHello = true, Https = false, Critical = true },
+        new() { Label = "Discord API", Host = "discord.com", HttpPath = "/api/v10/gateway",
+                Https = true, RequireHttpOk = true, Critical = true },
+        new() { Label = "YouTube", Host = "www.youtube.com", HttpPath = "/",
+                Https = true, RequireHttpOk = true, Critical = true },
     };
 
     public async Task<DiagnosticsReport> RunAsync(
@@ -99,12 +107,51 @@ public sealed class ConnectivityTester
     public Task<DiagnosticsReport> RunDefaultAsync(CancellationToken ct = default)
         => RunAsync(DefaultTargets, ct, retryOnFail: true);
 
-    /// <summary>Fast, critical-only probe used during strategy selection.</summary>
-    public Task<DiagnosticsReport> RunSelectionAsync(CancellationToken ct = default)
-        => RunAsync(SelectionTargets, ct);
+    public const int SelectionRounds = 2;
+    private const int RoundGapMs = 500;
+
+    /// <summary>
+    /// Strategy-selection probe: runs the strict critical set <paramref name="rounds"/> times and
+    /// keeps the WORST verdict per target, so a service counts as Open only if it passed EVERY round.
+    /// This rejects flaky desyncs that happen to pass a single lucky probe (the classic "auto-select
+    /// picked a preset but Discord still didn't work").
+    /// </summary>
+    public async Task<DiagnosticsReport> RunSelectionAsync(CancellationToken ct = default, int rounds = SelectionRounds)
+    {
+        Dictionary<string, HostProbeResult>? merged = null;
+        for (int i = 0; i < rounds; i++)
+        {
+            if (i > 0) { try { await Task.Delay(RoundGapMs, ct); } catch (OperationCanceledException) { break; } }
+            var report = await RunAsync(SelectionTargets, ct);
+            if (merged is null) { merged = report.Results.ToDictionary(r => r.Label); continue; }
+            foreach (var r in report.Results)
+                if (merged.TryGetValue(r.Label, out var prev) && Rank(r.Verdict) < Rank(prev.Verdict))
+                    merged[r.Label] = r; // keep the worse of the rounds
+        }
+        return new DiagnosticsReport { Results = merged?.Values.ToList() ?? new List<HostProbeResult>() };
+    }
+
+    private static int Rank(ServiceVerdict v) => v switch
+    {
+        ServiceVerdict.Open => 4,
+        ServiceVerdict.Throttled => 3,
+        ServiceVerdict.Blocked => 2,
+        ServiceVerdict.Unreachable => 1,
+        _ => 0,
+    };
+
+    /// <summary>Prime a freshly-started winws (its first flow often isn't rewritten cleanly), discarded.</summary>
+    public async Task WarmupAsync(CancellationToken ct)
+    {
+        try { await RunAsync(SelectionTargets, ct); } catch { /* result intentionally ignored */ }
+    }
 
     public async Task<HostProbeResult> ProbeAsync(ProbeTarget target, CancellationToken ct)
     {
+        // Gateway-style targets: the probe IS the WS upgrade (+ Hello) — no throwaway TLS preamble.
+        if (target.WebSocket)
+            return await ProbeWebSocketTargetAsync(target, ct);
+
         bool tcp = false, tls = false, ws = false;
         int? httpStatus = null;
         double handshakeMs = 0;
@@ -164,19 +211,13 @@ public sealed class ConnectivityTester
 
             if (target.Https)
             {
-                try { httpStatus = await MinimalHttpGetAsync(ssl, target.Host, ct); }
+                try { httpStatus = await MinimalHttpGetAsync(ssl, target.Host, target.HttpPath ?? "/", ct); }
                 catch (Exception ex) { detail = $"http: {Simplify(ex)}"; }
             }
         }
         catch (Exception ex)
         {
             detail = Simplify(ex);
-        }
-
-        if (target.WebSocket)
-        {
-            try { ws = await ProbeWebSocketAsync(target, ct); }
-            catch (Exception ex) { detail = $"ws: {Simplify(ex)}"; }
         }
 
         return Build(target, tcp, tls, ws, httpStatus, handshakeMs, detail);
@@ -188,7 +229,9 @@ public sealed class ConnectivityTester
         ServiceVerdict verdict;
         if (!tcp) verdict = ServiceVerdict.Unreachable;
         else if (!tls) verdict = ServiceVerdict.Blocked;
-        else if (t.WebSocket && !ws) verdict = ServiceVerdict.Throttled;
+        // Handshake completed but the app layer is dead (DPI reset after TLS): a required HTTP status
+        // that isn't a real 2xx/3xx means Blocked, not a free pass.
+        else if (t.RequireHttpOk && http is not (>= 200 and < 400)) verdict = ServiceVerdict.Blocked;
         else if (ms > ThrottleMs) verdict = ServiceVerdict.Throttled;
         else verdict = ServiceVerdict.Open;
 
@@ -207,9 +250,9 @@ public sealed class ConnectivityTester
         };
     }
 
-    private static async Task<int?> MinimalHttpGetAsync(SslStream ssl, string host, CancellationToken ct)
+    private static async Task<int?> MinimalHttpGetAsync(SslStream ssl, string host, string path, CancellationToken ct)
     {
-        var req = $"GET / HTTP/1.1\r\nHost: {host}\r\nUser-Agent: DashConnect/1.0\r\nAccept: */*\r\nConnection: close\r\n\r\n";
+        var req = $"GET {path} HTTP/1.1\r\nHost: {host}\r\nUser-Agent: DashConnect/1.0\r\nAccept: */*\r\nConnection: close\r\n\r\n";
         var bytes = Encoding.ASCII.GetBytes(req);
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         cts.CancelAfter(TlsTimeoutMs);
@@ -225,17 +268,53 @@ public sealed class ConnectivityTester
         return null;
     }
 
-    private static async Task<bool> ProbeWebSocketAsync(ProbeTarget target, CancellationToken ct)
+    private const double WsThrottleMs = 2000;
+
+    /// <summary>
+    /// Probe a WebSocket target. ConnectAsync completes only on HTTP 101. When RequireHello is set we
+    /// also read the first gateway frame, which must be Discord's op-10 Hello — this catches DPI that
+    /// permits the upgrade but resets once WS data flows (completely invisible to a TLS-only probe).
+    /// </summary>
+    private static async Task<HostProbeResult> ProbeWebSocketTargetAsync(ProbeTarget t, CancellationToken ct)
     {
-        var uri = new Uri($"wss://{target.Host}{target.WebSocketPath ?? "/"}");
+        var uri = new Uri($"wss://{t.Host}{t.WebSocketPath ?? "/"}");
         using var socket = new ClientWebSocket();
         socket.Options.RemoteCertificateValidationCallback = AcceptAnyCert;
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         cts.CancelAfter(WsTimeoutMs);
-        await socket.ConnectAsync(uri, cts.Token);
-        bool ok = socket.State == WebSocketState.Open;
-        socket.Abort(); // instant, no network round-trip — CloseAsync could hang forever if black-holed
-        return ok;
+
+        var sw = Stopwatch.StartNew();
+        bool upgraded = false, hello = false;
+        string? detail = null;
+        try
+        {
+            await socket.ConnectAsync(uri, cts.Token);              // returns only on HTTP 101
+            upgraded = socket.State == WebSocketState.Open;
+            if (upgraded && t.RequireHello)
+            {
+                var buf = new byte[4096];
+                var res = await socket.ReceiveAsync(buf, cts.Token); // first gateway frame
+                var text = Encoding.UTF8.GetString(buf, 0, res.Count);
+                hello = text.Contains("\"op\":10") || text.Contains("\"op\": 10") || text.Contains("heartbeat_interval");
+                if (!hello) detail = "ws: no Hello frame";
+            }
+            else if (!upgraded) detail = "ws: upgrade failed";
+        }
+        catch (Exception ex) { detail = $"ws: {Simplify(ex)}"; }
+        finally { try { socket.Abort(); } catch { } } // instant; CloseAsync could hang on a black-holed flow
+
+        double ms = sw.Elapsed.TotalMilliseconds;
+        bool ok = upgraded && (!t.RequireHello || hello);
+        var verdict = !ok ? ServiceVerdict.Blocked
+                    : ms > WsThrottleMs ? ServiceVerdict.Throttled
+                    : ServiceVerdict.Open;
+
+        return new HostProbeResult
+        {
+            Label = t.Label, Host = t.Host, Critical = t.Critical,
+            TcpConnected = upgraded, TlsHandshakeOk = upgraded, WebSocketOk = ok,
+            HandshakeMs = ms, Verdict = verdict, Detail = detail,
+        };
     }
 
     private static bool AcceptAnyCert(object sender, X509Certificate? cert, X509Chain? chain, SslPolicyErrors errors)

@@ -14,7 +14,7 @@ public sealed record UpdateInfo(string Version, string DownloadUrl, string Notes
 /// </summary>
 public static class UpdateChecker
 {
-    public const string CurrentVersion = "1.0.22";
+    public const string CurrentVersion = "1.1.0";
     public const string Owner = "dutow20162007-create";
     public const string Repo = "DashConnect";
 

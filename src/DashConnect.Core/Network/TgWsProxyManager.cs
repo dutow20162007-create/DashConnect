@@ -46,7 +46,13 @@ public sealed class TgWsProxyManager : IAsyncDisposable
 
         if (IsRunning && _secret == secret && await PortOpenAsync(ct)) return true; // already up
 
+        // Kill our tracked process AND any orphans left by a previous app run — a leftover instance
+        // holding 127.0.0.1:1443 makes the new one fail to bind ([Errno 10048]) and exit immediately,
+        // which looked like "the bridge won't start". Then wait for the OS to actually free the port.
         Stop();
+        await KillOrphansAsync();
+        await WaitPortFreeAsync(ct);
+
         _secret = secret;
         status?.Invoke("Поднимаю WebSocket-мост Telegram…");
         try
@@ -68,11 +74,11 @@ public sealed class TgWsProxyManager : IAsyncDisposable
             // Drain both streams so it keeps running for the whole session.
             _proc.OutputDataReceived += (_, _) => { };
             _proc.ErrorDataReceived += (_, _) => { };
-            if (!_proc.Start()) { Log.Warn("tgws", "процесс не стартовал"); return false; }
+            if (!_proc.Start()) { Log.Warn("tgws", "процесс не стартовал"); _proc = null; return false; }
             _proc.BeginOutputReadLine();
             _proc.BeginErrorReadLine();
         }
-        catch (Exception ex) { Log.Warn("tgws", $"launch: {ex.Message}"); return false; }
+        catch (Exception ex) { Log.Warn("tgws", $"launch: {ex.Message}"); _proc = null; return false; }
 
         for (int i = 0; i < 15 && !ct.IsCancellationRequested; i++)
         {
@@ -88,6 +94,16 @@ public sealed class TgWsProxyManager : IAsyncDisposable
         }
         Stop();
         return false;
+    }
+
+    /// <summary>Wait (up to ~3s) for port 1443 to be released after killing a previous instance.</summary>
+    private static async Task WaitPortFreeAsync(CancellationToken ct)
+    {
+        for (int i = 0; i < 15 && !ct.IsCancellationRequested; i++)
+        {
+            if (!await PortOpenAsync(ct)) return;
+            await Task.Delay(200, ct);
+        }
     }
 
     private static async Task<bool> PortOpenAsync(CancellationToken ct)

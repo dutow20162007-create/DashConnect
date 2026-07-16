@@ -35,14 +35,27 @@ public sealed class SingboxManager : IAsyncDisposable
             await StopInternalAsync(ct);
             await KillOrphansAsync(ct);
 
-            // No output redirection (CreateNoWindow keeps it windowless) — piping sing-box's chatty
-            // logs to the UI dispatcher floods and freezes the window, same as winws did.
+            // Validate the config against THIS binary first. sing-box changes its config schema between
+            // versions; a mismatch otherwise looks like a silent immediate exit. `check` returns the
+            // exact offending field so the failure is diagnosable instead of invisible.
+            var (checkCode, checkOut) = await ProcessUtil.RunAsync(
+                exePath, $"check -c \"{configPath}\"", TimeSpan.FromSeconds(12), ct);
+            if (checkCode != 0)
+            {
+                Log.Error("singbox", $"config отклонён sing-box: {checkOut}");
+                return false;
+            }
+
+            // Stream sing-box's own logs to a FILE (never the UI dispatcher — that floods and freezes
+            // the window). Redirecting both pipes also prevents a full pipe buffer from blocking it.
             var psi = new ProcessStartInfo
             {
                 FileName = exePath,
                 WorkingDirectory = Path.GetDirectoryName(configPath) ?? Paths.SingboxDir,
                 UseShellExecute = false,
                 CreateNoWindow = true,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
             };
             psi.ArgumentList.Add("run");
             psi.ArgumentList.Add("-c");
@@ -51,6 +64,7 @@ public sealed class SingboxManager : IAsyncDisposable
             var proc = new Process { StartInfo = psi, EnableRaisingEvents = true };
             Log.Info("singbox", "запуск sing-box (TUN + маршрутизация)");
             if (!proc.Start()) { proc.Dispose(); return false; }
+            DrainToFile(proc, Path.Combine(Paths.LogsDir, "singbox.log"));
 
             try
             {
@@ -65,7 +79,7 @@ public sealed class SingboxManager : IAsyncDisposable
 
             if (proc.HasExited)
             {
-                Log.Error("singbox", $"sing-box сразу завершился (код {proc.ExitCode}) — проверьте конфиг/прокси");
+                Log.Error("singbox", $"sing-box сразу завершился (код {proc.ExitCode}) — см. logs\\singbox.log");
                 proc.Dispose();
                 return false;
             }
@@ -105,6 +119,20 @@ public sealed class SingboxManager : IAsyncDisposable
         }
         catch (Exception ex) { Log.Warn("singbox", $"stop: {ex.Message}"); }
         finally { proc.Dispose(); }
+    }
+
+    /// <summary>Streams a started process's stdout/stderr to a log file (drains both pipes so they
+    /// can't fill and block sing-box). The writer is closed when the process exits.</summary>
+    private static void DrainToFile(Process proc, string logFile)
+    {
+        StreamWriter sw;
+        try { sw = new StreamWriter(logFile, append: false) { AutoFlush = true }; }
+        catch { return; }
+        var gate = new object();
+        proc.OutputDataReceived += (_, e) => { if (e.Data is not null) { lock (gate) { try { sw.WriteLine(e.Data); } catch { } } } };
+        proc.ErrorDataReceived += (_, e) => { if (e.Data is not null) { lock (gate) { try { sw.WriteLine("! " + e.Data); } catch { } } } };
+        proc.Exited += (_, _) => { lock (gate) { try { sw.Dispose(); } catch { } } };
+        try { proc.BeginOutputReadLine(); proc.BeginErrorReadLine(); } catch { }
     }
 
     public async ValueTask DisposeAsync()

@@ -348,14 +348,46 @@
                                         <ColumnDefinition Width="Auto"/>
                                     </Grid.ColumnDefinitions>
                                     <TextBox Grid.Column="0" Style="{StaticResource Input}"
-                                             Text="{Binding SubscriptionUrl, UpdateSourceTrigger=PropertyChanged}"/>
+                                             Text="{Binding SubscriptionUrl}"/>
                                     <Button Grid.Column="1" Content="Загрузить" Style="{StaticResource GhostButton}"
                                             Margin="8,0,0,0" Command="{Binding RefreshSubscriptionCommand}"/>
                                 </Grid>
 
+                                <!-- Или конфиг Amnezia (.conf) — AmneziaWG (обфусцированный WireGuard) -->
+                                <TextBlock Text="Или конфиг Amnezia (.conf)" Style="{StaticResource Sub}"/>
+                                <Grid Margin="0,4,0,6">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBox Grid.Column="0" Style="{StaticResource Input}"
+                                             Text="{Binding AmneziaConfig}"
+                                             AcceptsReturn="True" TextWrapping="NoWrap" Height="64"
+                                             VerticalScrollBarVisibility="Auto" VerticalContentAlignment="Top"
+                                             FontFamily="Consolas" FontSize="11"
+                                             ToolTip="Вставь сюда содержимое .conf или загрузи файл"/>
+                                    <Button Grid.Column="1" Content="Файл…" Style="{StaticResource GhostButton}"
+                                            Margin="8,0,0,0" VerticalAlignment="Top" Command="{Binding PickAmneziaFileCommand}"/>
+                                    <Button Grid.Column="2" Content="Очистить" Style="{StaticResource GhostButton}"
+                                            Margin="8,0,0,0" VerticalAlignment="Top" Command="{Binding ClearAmneziaCommand}"/>
+                                </Grid>
+                                <Grid Margin="0,0,0,12">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Grid.Column="0" Margin="0,0,12,0" VerticalAlignment="Center">
+                                        <TextBlock Text="Использовать Amnezia вместо ссылки" Style="{StaticResource Label}"/>
+                                        <TextBlock Text="{Binding AmneziaStatus}" Style="{StaticResource Sub}" FontSize="11" TextWrapping="Wrap"/>
+                                    </StackPanel>
+                                    <CheckBox Grid.Column="1" Style="{StaticResource Switch}" VerticalAlignment="Center"
+                                              IsChecked="{Binding UseAmnezia}" IsEnabled="{Binding CanEditSettings}"/>
+                                </Grid>
+
                                 <TextBlock Text="Папка Zapret" Style="{StaticResource Sub}"/>
                                 <TextBox Style="{StaticResource Input}" Margin="0,4,0,12"
-                                         Text="{Binding ZapretRoot, UpdateSourceTrigger=PropertyChanged}"
+                                         Text="{Binding ZapretRoot}"
                                          IsEnabled="{Binding CanEditSettings}"/>
 
                                 <TextBlock Text="Стратегия (пресет Zapret)" Style="{StaticResource Sub}" Margin="0,2,0,4"/>
@@ -491,6 +523,15 @@
                                     <Button Content="Папка Zapret ▸" Style="{StaticResource GhostButton}" Command="{Binding OpenZapretFolderCommand}"/>
                                     <Button Content="Данные ▸" Style="{StaticResource GhostButton}" Margin="8,0,0,0" Command="{Binding OpenDataFolderCommand}"/>
                                 </StackPanel>
+
+                                <Border Height="1" Background="{StaticResource Border}" Margin="0,18,0,12"/>
+                                <TextBlock Text="О программе" Style="{StaticResource Sub}" FontWeight="SemiBold" Margin="0,0,0,4"/>
+                                <TextBlock Foreground="{StaticResource Muted}" FontSize="12" Margin="0,0,0,2">
+                                    <Run Text="Telegram-канал: "/>
+                                    <Hyperlink NavigateUri="https://t.me/HUGOVSYKAYA"
+                                               RequestNavigate="Hyperlink_RequestNavigate"
+                                               Foreground="{StaticResource Accent}" TextDecorations="Underline">t.me/HUGOVSYKAYA</Hyperlink>
+                                </TextBlock>
                             </StackPanel>
                         </Border>
                     </StackPanel>

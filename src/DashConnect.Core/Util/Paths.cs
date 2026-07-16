@@ -19,10 +19,16 @@ public static class Paths
     public static string SingboxConfig => Path.Combine(SingboxDir, "config.json");
     public static string GameRoutesFile => Path.Combine(AppDataDir, "game-routes.json");
 
+    /// <summary>Where the active AmneziaWG .conf is written for the tunnel service. The file's base
+    /// name ("dashconnect") becomes the Windows service name (AmneziaWGTunnel$dashconnect).</summary>
+    public static string AmneziaDir => Path.Combine(AppDataDir, "amnezia");
+    public static string AmneziaConfigFile => Path.Combine(AmneziaDir, "dashconnect.conf");
+
     public static void EnsureDirectories()
     {
         Directory.CreateDirectory(AppDataDir);
         Directory.CreateDirectory(LogsDir);
         Directory.CreateDirectory(SingboxDir);
+        Directory.CreateDirectory(AmneziaDir);
     }
 }
