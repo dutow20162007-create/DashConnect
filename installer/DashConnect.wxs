@@ -5,7 +5,7 @@
        supports clean major-version upgrades (used by the in-app auto-updater). -->
   <Package Name="Dash Connect"
            Manufacturer="Dash Connect"
-           Version="1.1.0.0"
+           Version="1.1.10.0"
            UpgradeCode="7E9A2C13-4B6F-4E2A-9C1D-8F3A5B7E1D20"
            Scope="perMachine"
            Compressed="yes">

@@ -448,11 +448,18 @@ public sealed class MainViewModel : ViewModelBase
     {
         var domain = NewDomainInput.Trim();
         if (domain.Length == 0) return;
-        int added = HostlistManager.AppendDomains(_config.ZapretRoot, new[] { domain });
-        StatusText = added > 0
-            ? $"Добавлено «{domain}» — переподключитесь, чтобы применить"
-            : $"«{domain}» уже есть в списке";
-        NewDomainInput = "";
+        try
+        {
+            int added = HostlistManager.AppendDomains(_config.ZapretRoot, new[] { domain });
+            StatusText = added > 0
+                ? $"Добавлено «{domain}» — переподключитесь, чтобы применить"
+                : $"«{domain}» уже есть в списке";
+            NewDomainInput = "";
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"Не удалось сохранить домен: {ex.Message}";
+        }
     }
 
     private void AddVpnApp()

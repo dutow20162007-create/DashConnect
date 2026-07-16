@@ -74,11 +74,11 @@ public sealed class TgWsProxyManager : IAsyncDisposable
             // Drain both streams so it keeps running for the whole session.
             _proc.OutputDataReceived += (_, _) => { };
             _proc.ErrorDataReceived += (_, _) => { };
-            if (!_proc.Start()) { Log.Warn("tgws", "процесс не стартовал"); _proc = null; return false; }
+            if (!_proc.Start()) { Log.Warn("tgws", "процесс не стартовал"); _proc.Dispose(); _proc = null; return false; }
             _proc.BeginOutputReadLine();
             _proc.BeginErrorReadLine();
         }
-        catch (Exception ex) { Log.Warn("tgws", $"launch: {ex.Message}"); _proc = null; return false; }
+        catch (Exception ex) { Log.Warn("tgws", $"launch: {ex.Message}"); _proc?.Dispose(); _proc = null; return false; }
 
         for (int i = 0; i < 15 && !ct.IsCancellationRequested; i++)
         {
@@ -122,6 +122,7 @@ public sealed class TgWsProxyManager : IAsyncDisposable
     public void Stop()
     {
         try { if (_proc is { HasExited: false }) _proc.Kill(entireProcessTree: true); } catch { }
+        _proc?.Dispose(); // release the process + redirected pipe handles (was leaked until GC)
         _proc = null;
     }
 

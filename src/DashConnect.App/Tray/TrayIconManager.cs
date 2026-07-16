@@ -49,12 +49,6 @@ public sealed class TrayIconManager : IDisposable
         _toggleItem.Text = active ? "Отключить" : "Подключить";
     }
 
-    public void Notify(string title, string text)
-    {
-        try { _icon.ShowBalloonTip(3000, title, text, ToolTipIcon.Info); }
-        catch { /* balloon tips are best-effort */ }
-    }
-
     public void Dispose()
     {
         _icon.Visible = false;

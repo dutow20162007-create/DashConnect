@@ -140,7 +140,8 @@ public partial class App : Application
         try
         {
             var info = await UpdateChecker.CheckAsync();
-            if (info is null || _window is null) return;
+            if (info is null || _window is null || _updatePrompted) return;
+            _updatePrompted = true; // only ever show one update card per session
             new UpdateWindow(info) { Owner = _window }.Show();
         }
         catch (Exception ex) { Log.Debug("update", $"update flow: {ex.Message}"); }
@@ -171,6 +172,7 @@ public partial class App : Application
     }
 
     private bool _exitStarted;
+    private bool _updatePrompted;
     private bool _updateReChecked;
 
     public void ExitApp()

@@ -123,6 +123,10 @@ public static class DnsManager
                 await RestoreFamilyAsync("ipv4", a.Name, a.V4, ct);
                 await RestoreFamilyAsync("ipv6", a.Name, a.V6, ct);
             }
+            // Remove the global DoH encryption mappings registered in ApplyAsync — otherwise they persist
+            // system-wide after the tool disconnects.
+            foreach (var s in V4) await NetshAsync($"dns delete encryption server={s}", ct);
+            foreach (var s in V6) await NetshAsync($"dns delete encryption server={s}", ct);
             await FlushAsync(ct);
             try { File.Delete(BackupFile); } catch { }
             Log.Info("dns", "DNS возвращён на исходный");

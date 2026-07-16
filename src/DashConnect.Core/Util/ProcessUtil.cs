@@ -34,12 +34,6 @@ public static class ProcessUtil
         return killed;
     }
 
-    public static bool IsRunning(string processName)
-    {
-        try { return Process.GetProcessesByName(processName).Length > 0; }
-        catch { return false; }
-    }
-
     private static async Task WaitForExitSafeAsync(Process p, TimeSpan timeout, CancellationToken ct)
     {
         try

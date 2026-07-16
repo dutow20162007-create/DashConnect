@@ -123,10 +123,18 @@ public sealed class ConnectivityTester
         {
             if (i > 0) { try { await Task.Delay(RoundGapMs, ct); } catch (OperationCanceledException) { break; } }
             var report = await RunAsync(SelectionTargets, ct);
-            if (merged is null) { merged = report.Results.ToDictionary(r => r.Label); continue; }
-            foreach (var r in report.Results)
-                if (merged.TryGetValue(r.Label, out var prev) && Rank(r.Verdict) < Rank(prev.Verdict))
-                    merged[r.Label] = r; // keep the worse of the rounds
+            if (merged is null)
+                merged = report.Results.ToDictionary(r => r.Label);
+            else
+                foreach (var r in report.Results)
+                    if (merged.TryGetValue(r.Label, out var prev) && Rank(r.Verdict) < Rank(prev.Verdict))
+                        merged[r.Label] = r; // keep the worse of the rounds
+
+            // SHORT-CIRCUIT: a critical target that already hard-failed can't be rescued by more rounds
+            // (worst-of-N only keeps the worse verdict), so stop early rather than run the rest.
+            if (merged.Values.Any(r => r.Critical &&
+                    (r.Verdict == ServiceVerdict.Blocked || r.Verdict == ServiceVerdict.Unreachable)))
+                break;
         }
         return new DiagnosticsReport { Results = merged?.Values.ToList() ?? new List<HostProbeResult>() };
     }

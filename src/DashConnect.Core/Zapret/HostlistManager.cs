@@ -13,16 +13,6 @@ public static class HostlistManager
 
     public static string UserListPath(string root) => Path.Combine(root, "lists", UserList);
 
-    public static IReadOnlyList<string> ReadUserDomains(string root)
-    {
-        var path = UserListPath(root);
-        if (!File.Exists(path)) return Array.Empty<string>();
-        return File.ReadAllLines(path)
-            .Select(l => l.Trim())
-            .Where(l => l.Length > 0 && !l.StartsWith('#'))
-            .ToList();
-    }
-
     /// <summary>Appends new, de-duplicated domains. Returns how many were actually added.</summary>
     public static int AppendDomains(string root, IEnumerable<string> domains)
     {

@@ -13,10 +13,6 @@ public static class ProxyUrlParser
 {
     public const string OutboundTag = "game-proxy";
 
-    public static bool IsSupported(string url)
-        => url.StartsWith("vless://", StringComparison.OrdinalIgnoreCase)
-        || url.StartsWith("ss://", StringComparison.OrdinalIgnoreCase);
-
     public static Dictionary<string, object?>? Parse(string url, out string? error)
     {
         error = null;

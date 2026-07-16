@@ -36,10 +36,8 @@ public sealed class AppOrchestrator : IAsyncDisposable
 
     public EngineState State { get; private set; } = EngineState.Stopped;
     public ZapretStrategy? ActiveStrategy => _zapret.Current;
-    public bool DpiActive => _zapret.IsRunning;
-    public bool GameRoutingActive => _singbox.IsRunning;
-    public bool AmneziaActive => _amnezia.IsRunning;
-    public bool IsConnected => _zapret.IsRunning || _singbox.IsRunning || _amnezia.IsRunning;
+    public bool IsConnected =>
+        _zapret.IsRunning || _singbox.IsRunning || _amnezia.IsRunning || _tgws.IsRunning;
 
     /// <summary>The Telegram WebSocket bridge is running (tg-ws-proxy on 127.0.0.1:1443).</summary>
     public bool TelegramProxyActive => _tgws.IsRunning;
@@ -147,7 +145,7 @@ public sealed class AppOrchestrator : IAsyncDisposable
             {
                 Status("Включаю зашифрованный DNS…");
                 dnsOk = await DnsManager.ApplyAsync(ct);
-                _dnsApplied = true;
+                _dnsApplied = dnsOk; // only mark applied if it actually took — else revert would run needlessly
             }
 
             // ---- Subsystem D: Telegram WebSocket bridge (Flowseal tg-ws-proxy) ----
@@ -166,7 +164,7 @@ public sealed class AppOrchestrator : IAsyncDisposable
             finalReport = await _tester.RunDefaultAsync(ct);
             DiagnosticsUpdated?.Invoke(finalReport);
 
-            var connected = _zapret.IsRunning || _singbox.IsRunning || _amnezia.IsRunning || (needZapret && directOpen);
+            var connected = _zapret.IsRunning || _singbox.IsRunning || _amnezia.IsRunning || _tgws.IsRunning || (needZapret && directOpen);
             SetState(connected ? EngineState.Running : EngineState.Error);
             var summary = BuildSummary(finalReport, directOpen);
             if (config.CleanDnsEnabled)

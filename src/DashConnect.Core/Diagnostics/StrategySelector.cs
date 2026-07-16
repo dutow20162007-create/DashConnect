@@ -96,9 +96,17 @@ public sealed class StrategySelector
             Log.Info("selector",
                 $"'{strategy.Name}': {CriticalOpen(report)}/{report.Results.Count} open, avg {report.AverageHandshakeMs:F0}ms");
 
-            // No early-exit: test EVERY preset, then pick the objectively best below. Slower, but it
-            // never settles for the first pass — the user can "Save working" afterwards to skip the
-            // sweep next time.
+            // EARLY-ACCEPT: candidates are ordered strong/fast-first, so the first preset that clears
+            // EVERY critical service (incl. the Discord gateway op-10 Hello) is good enough — take it and
+            // stop, instead of grinding through all ~50 (each costs ~6-24s). If none fully passes, the
+            // loop finishes and the ranking below still picks the objective best.
+            if (GatewayWorks(report) && report.AllCriticalOpen)
+            {
+                onFraction?.Invoke(1);
+                onProgress($"Найдена рабочая стратегия «{strategy.Name}» — беру её");
+                Log.Info("selector", $"early-accept «{strategy.Name}» after {index}/{candidates.Count}");
+                return new SelectionResult(strategy, baseline, evaluations, DirectAlreadyOpen: false);
+            }
         }
 
         onFraction?.Invoke(1);

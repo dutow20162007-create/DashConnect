@@ -108,10 +108,20 @@ public partial class MainWindow : Window
     protected override void OnClosing(CancelEventArgs e)
     {
         var app = (App)Application.Current;
-        if (!app.IsExiting && DataContext is MainViewModel { MinimizeToTrayOnClose: true })
+        if (!app.IsExiting)
         {
             e.Cancel = true;
-            Hide();
+            if (DataContext is MainViewModel { MinimizeToTrayOnClose: true })
+            {
+                Hide();
+            }
+            else
+            {
+                // Closing (not minimizing to tray) must run the SAME graceful shutdown as the tray
+                // "Выход" — stop winws/AmneziaWG/WARP/Telegram-bridge and revert DNS. Otherwise those
+                // survive as orphans and (AmneziaWG full-tunnel) can strand the machine's internet.
+                app.ExitApp(); // idempotent: hides window, async cleanup, then Shutdown()
+            }
             return;
         }
         base.OnClosing(e);
