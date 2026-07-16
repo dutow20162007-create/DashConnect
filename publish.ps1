@@ -89,11 +89,13 @@ $tag = "v$cur"
 gh release view $tag > $null 2>&1
 $exists = ($LASTEXITCODE -eq 0)
 if ($exists) {
-    gh release upload $tag $msi (Join-Path $root 'dist\DashConnect.exe') --clobber 2>&1 | Out-Null
+    # Only the MSI installer is published — the portable exe confused users (they'd run it without the
+    # bundled assets/elevation and report "doesn't work"), so we no longer attach it.
+    gh release upload $tag $msi --clobber 2>&1 | Out-Null
     if ($LASTEXITCODE -ne 0) { throw "gh release upload failed ($LASTEXITCODE)" }
     Write-Host "[publish] assets refreshed on release $tag" -ForegroundColor Green
 } else {
-    gh release create $tag $msi (Join-Path $root 'dist\DashConnect.exe') --title "Dash Connect $cur" --notes "Build $cur." 2>&1 | Out-Null
+    gh release create $tag $msi --title "Dash Connect $cur" --notes "Build $cur." 2>&1 | Out-Null
     if ($LASTEXITCODE -ne 0) { throw "gh release create failed ($LASTEXITCODE)" }
     Write-Host "[publish] created release $tag" -ForegroundColor Green
 }
