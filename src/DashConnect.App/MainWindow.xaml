@@ -367,7 +367,7 @@
                                              VerticalScrollBarVisibility="Auto" VerticalContentAlignment="Top"
                                              FontFamily="Consolas" FontSize="11"
                                              ToolTip="Вставь сюда содержимое .conf или загрузи файл"/>
-                                    <Button Grid.Column="1" Content="Файл…" Style="{StaticResource GhostButton}"
+                                    <Button Grid.Column="1" Content="Импорт .conf" Style="{StaticResource GhostButton}"
                                             Margin="8,0,0,0" VerticalAlignment="Top" Command="{Binding PickAmneziaFileCommand}"/>
                                     <Button Grid.Column="2" Content="Очистить" Style="{StaticResource GhostButton}"
                                             Margin="8,0,0,0" VerticalAlignment="Top" Command="{Binding ClearAmneziaCommand}"/>
@@ -447,6 +447,12 @@
                                             Margin="8,0,0,0" Command="{Binding ClearPinCommand}"/>
                                 </StackPanel>
                                 <TextBlock Text="{Binding PinnedInfo}" Style="{StaticResource Sub}" TextWrapping="Wrap" Margin="2,6,0,0"/>
+
+                                <Button Content="🔁  Перебрать ВСЕ стратегии" Style="{StaticResource GhostButton}"
+                                        HorizontalAlignment="Stretch" Height="38" Margin="0,10,0,0"
+                                        Command="{Binding ReselectAllCommand}"/>
+                                <TextBlock Text="перебирает все пресеты и выбирает лучший (дольше обычного автоподбора, который берёт первый рабочий)"
+                                           Style="{StaticResource Sub}" FontSize="11" TextWrapping="Wrap" Margin="2,4,0,0"/>
 
                                 <TextBlock Text="Telegram" Style="{StaticResource Sub}" FontWeight="SemiBold" Margin="0,16,0,2"/>
                                 <Grid Margin="0,2,0,4">

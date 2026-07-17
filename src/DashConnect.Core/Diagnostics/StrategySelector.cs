@@ -34,6 +34,7 @@ public sealed class StrategySelector
         IReadOnlyList<ZapretStrategy> candidates,
         Action<string> onProgress,
         Action<double>? onFraction = null,
+        bool exhaustive = false,
         CancellationToken ct = default)
     {
         // 1. Baseline — is a bypass even needed right now?
@@ -99,8 +100,9 @@ public sealed class StrategySelector
             // EARLY-ACCEPT: candidates are ordered strong/fast-first, so the first preset that clears
             // EVERY critical service (incl. the Discord gateway op-10 Hello) is good enough — take it and
             // stop, instead of grinding through all ~50 (each costs ~6-24s). If none fully passes, the
-            // loop finishes and the ranking below still picks the objective best.
-            if (GatewayWorks(report) && report.AllCriticalOpen)
+            // loop finishes and the ranking below still picks the objective best. In EXHAUSTIVE mode
+            // ("Перебрать все стратегии") we skip early-accept and test every preset.
+            if (!exhaustive && GatewayWorks(report) && report.AllCriticalOpen)
             {
                 onFraction?.Invoke(1);
                 onProgress($"Найдена рабочая стратегия «{strategy.Name}» — беру её");

@@ -60,7 +60,7 @@ public sealed class AppOrchestrator : IAsyncDisposable
         bool DirectAlreadyOpen);
 
     /// <summary>Runs the full connect sequence for the currently enabled modules.</summary>
-    public async Task<ConnectionOutcome> ConnectAsync(AppConfig config, CancellationToken external = default)
+    public async Task<ConnectionOutcome> ConnectAsync(AppConfig config, bool exhaustive = false, CancellationToken external = default)
     {
         await _opGate.WaitAsync(external);
         CancellationToken ct;
@@ -98,11 +98,12 @@ public sealed class AppOrchestrator : IAsyncDisposable
                 // below (a single persistent winws — safe, like double-clicking the .bat).
                 var scanStrategies = StrategyProvider.LoadAll(config.ZapretRoot, GameFilterMode.Disabled);
 
-                if (config.AutoSelect && string.IsNullOrWhiteSpace(config.PreferredStrategy))
+                // Exhaustive ("Перебрать все стратегии") forces a full re-scan even if a preset is pinned.
+                if (exhaustive || (config.AutoSelect && string.IsNullOrWhiteSpace(config.PreferredStrategy)))
                 {
                     SetState(EngineState.Testing);
                     var selection = await _selector.SelectBestAsync(
-                        config.ZapretRoot, scanStrategies.ToList(), Status, Progress, ct);
+                        config.ZapretRoot, scanStrategies.ToList(), Status, Progress, exhaustive: exhaustive, ct: ct);
                     directOpen = selection.DirectAlreadyOpen;
                     chosen = selection.Best;
                 }

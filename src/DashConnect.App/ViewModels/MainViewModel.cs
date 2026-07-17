@@ -58,6 +58,7 @@ public sealed class MainViewModel : ViewModelBase
         catch { /* first run — empty list */ }
 
         ToggleConnectCommand = new RelayCommand(ToggleConnect);
+        ReselectAllCommand = new AsyncRelayCommand(ReselectAllAsync, () => !IsBusy);
         RunDiagnosticsCommand = new AsyncRelayCommand(RunDiagnosticsAsync, () => !IsBusy);
         RefreshSubscriptionCommand = new AsyncRelayCommand(RefreshSubscriptionAsync, () => !IsBusy);
         AddDomainCommand = new RelayCommand(AddDomain, () => !string.IsNullOrWhiteSpace(NewDomainInput));
@@ -89,6 +90,7 @@ public sealed class MainViewModel : ViewModelBase
 
     // ---- Commands ----
     public ICommand ToggleConnectCommand { get; }
+    public ICommand ReselectAllCommand { get; }
     public ICommand RunDiagnosticsCommand { get; }
     public ICommand RefreshSubscriptionCommand { get; }
     public ICommand AddDomainCommand { get; }
@@ -358,16 +360,26 @@ public sealed class MainViewModel : ViewModelBase
         else { Save(); _ = ConnectAsync(); }
     }
 
+    /// <summary>"Перебрать все стратегии": reconnect, testing EVERY preset and keeping the best (no
+    /// early-accept) instead of stopping at the first that works.</summary>
+    private async Task ReselectAllAsync()
+    {
+        if (State is EngineState.Running or EngineState.Starting or EngineState.Testing)
+            await _orchestrator.DisconnectAsync();
+        Save();
+        await ConnectAsync(exhaustive: true);
+    }
+
     private bool _connecting;
 
-    private async Task ConnectAsync()
+    private async Task ConnectAsync(bool exhaustive = false)
     {
         if (_connecting) return; // ignore re-entrant clicks while a connect is spinning up
         _connecting = true;
         // Run the whole connect sequence on a background thread so the UI never blocks.
         try
         {
-            await Task.Run(() => _orchestrator.ConnectAsync(_config));
+            await Task.Run(() => _orchestrator.ConnectAsync(_config, exhaustive));
             Save(); // persist a freshly generated Telegram proxy secret, if any
 
             // First connect ever: hand Telegram the proxy link once, fully in the background — launch
