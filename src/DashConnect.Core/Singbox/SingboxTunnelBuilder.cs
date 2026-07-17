@@ -87,8 +87,11 @@ public static class SingboxTunnelBuilder
         {
             ["log"] = new Dictionary<string, object?> { ["level"] = "warn", ["timestamp"] = true },
             // DNS engine for the tunnel. remote-dns (DoH, through the proxy) resolves everything;
-            // bootstrap-dns (plain UDP, direct) resolves the DoH server's own name and is the domain
-            // resolver so it never deadlocks inside the tunnel. Required by sing-box 1.12+.
+            // bootstrap-dns (plain UDP) resolves the DoH server's / VLESS server's own name and is the
+            // domain resolver so it never deadlocks inside the tunnel. Required by sing-box 1.12+.
+            // NOTE: bootstrap-dns must NOT set detour:"direct" — sing-box 1.13 FATALs at runtime with
+            // "detour to an empty direct outbound makes no sense" (check passes, but run dies). Omitting
+            // the detour makes the bootstrap query go direct by default, which is exactly what we want.
             ["dns"] = new Dictionary<string, object?>
             {
                 ["servers"] = new object[]
@@ -100,7 +103,7 @@ public static class SingboxTunnelBuilder
                     },
                     new Dictionary<string, object?>
                     {
-                        ["type"] = "udp", ["tag"] = "bootstrap-dns", ["server"] = "1.1.1.1", ["detour"] = "direct",
+                        ["type"] = "udp", ["tag"] = "bootstrap-dns", ["server"] = "1.1.1.1",
                     },
                 },
                 ["final"] = "remote-dns",
