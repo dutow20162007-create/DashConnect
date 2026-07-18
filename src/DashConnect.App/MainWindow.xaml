@@ -220,6 +220,16 @@
                                 </Grid>
                                 <Separator Background="{StaticResource Border}" Margin="0,11"/>
                                 <Grid Margin="0,1">
+                                    <StackPanel Margin="0,0,60,0">
+                                        <TextBlock Text="Низкий пинг в играх" Style="{StaticResource Label}"/>
+                                        <TextBlock Text="не трогать игровые порты — убирает лаги/пинг в играх (голос в Discord может перестать работать)"
+                                                   Style="{StaticResource Sub}" TextWrapping="Wrap"/>
+                                    </StackPanel>
+                                    <CheckBox Style="{StaticResource Switch}" HorizontalAlignment="Right" VerticalAlignment="Center"
+                                              IsChecked="{Binding LowPingMode}" IsEnabled="{Binding CanEditSettings}"/>
+                                </Grid>
+                                <Separator Background="{StaticResource Border}" Margin="0,11"/>
+                                <Grid Margin="0,1">
                                     <StackPanel>
                                         <TextBlock Text="VPN" Style="{StaticResource Label}"/>
                                         <TextBlock Text="через ваш сервер · Telegram, игры, всё" Style="{StaticResource Sub}"/>

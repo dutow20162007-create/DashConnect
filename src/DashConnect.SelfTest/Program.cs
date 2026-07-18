@@ -46,6 +46,22 @@ if (general is not null)
     bool noCarets = strategies.SelectMany(s => s.Arguments).All(a => !a.Contains('^'));
     Check(noCarets, "no leftover ^ escape characters");
 
+    // Low-ping mode: winws must stop capturing the WIDE port ranges (that per-packet diversion is
+    // what added latency in games), while narrow ports stay so the bypass itself still works.
+    var lowPing = StrategyProvider.LoadAll(root, GameFilterMode.All, lowPing: true);
+    var lpFilters = lowPing.SelectMany(s => s.Arguments)
+        .Where(a => a.StartsWith("--wf-tcp=") || a.StartsWith("--wf-udp="))
+        .ToList();
+    Check(lpFilters.Count > 0, "low-ping: capture filters present");
+    Check(lpFilters.All(a => !a.Contains("50000-65535") && !a.Contains("1024-65535")),
+        "low-ping: wide game/voice port ranges stripped");
+    Check(lpFilters.Any(a => a.Contains("443")), "low-ping: port 443 still captured (bypass intact)");
+
+    // …and with low-ping OFF the wide ranges must still be there (no accidental regression).
+    var normal = StrategyProvider.LoadAll(root, GameFilterMode.All)
+        .SelectMany(s => s.Arguments).Where(a => a.StartsWith("--wf-udp=")).ToList();
+    Check(normal.Any(a => a.Contains("50000-65535")), "normal mode: wide ranges untouched");
+
     bool listsResolved = args0.Any(a => a.Contains("lists") && a.Contains(".txt"));
     Check(listsResolved, "hostlist paths resolved to lists .txt");
 

@@ -96,7 +96,7 @@ public sealed class AppOrchestrator : IAsyncDisposable
                 // every high port (all UDP/TCP 1024-65535); doing that repeatedly during a preset sweep
                 // can wedge a live network. The game filter is applied only to the FINAL chosen preset
                 // below (a single persistent winws — safe, like double-clicking the .bat).
-                var scanStrategies = StrategyProvider.LoadAll(config.ZapretRoot, GameFilterMode.Disabled);
+                var scanStrategies = StrategyProvider.LoadAll(config.ZapretRoot, GameFilterMode.Disabled, config.LowPingMode);
 
                 // Exhaustive ("Перебрать все стратегии") forces a full re-scan even if a preset is pinned.
                 if (exhaustive || (config.AutoSelect && string.IsNullOrWhiteSpace(config.PreferredStrategy)))
@@ -120,7 +120,7 @@ public sealed class AppOrchestrator : IAsyncDisposable
                     var gameFilter = config.GameDpiEnabled ? GameFilterMode.All : GameFilterMode.Disabled;
                     ZapretSettings.ApplyGameFilter(config.ZapretRoot, gameFilter);
                     var launch = config.GameDpiEnabled
-                        ? StrategyProvider.LoadAll(config.ZapretRoot, gameFilter)
+                        ? StrategyProvider.LoadAll(config.ZapretRoot, gameFilter, config.LowPingMode)
                               .FirstOrDefault(s => s.Name == chosen.Name) ?? chosen
                         : chosen;
 

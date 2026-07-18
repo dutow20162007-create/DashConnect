@@ -291,6 +291,13 @@ public sealed class MainViewModel : ViewModelBase
         set { if (_config.AutoSelect != value) { _config.AutoSelect = value; OnPropertyChanged(); Save(); } }
     }
 
+    /// <summary>Low-ping mode: stop winws capturing the wide UDP/TCP ranges that added game latency.</summary>
+    public bool LowPingMode
+    {
+        get => _config.LowPingMode;
+        set { if (_config.LowPingMode != value) { _config.LowPingMode = value; OnPropertyChanged(); Save(); } }
+    }
+
     /// <summary>All available preset names (for the picker).</summary>
     public ObservableCollection<string> Presets { get; } = new();
 
