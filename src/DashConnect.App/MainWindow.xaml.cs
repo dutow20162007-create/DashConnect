@@ -118,7 +118,7 @@ public partial class MainWindow : Window
             else
             {
                 // Closing (not minimizing to tray) must run the SAME graceful shutdown as the tray
-                // "Выход" — stop winws/AmneziaWG/WARP/Telegram-bridge and revert DNS. Otherwise those
+                // "Выход" — stop winws/AmneziaWG/Telegram-bridge and revert DNS. Otherwise those
                 // survive as orphans and (AmneziaWG full-tunnel) can strand the machine's internet.
                 app.ExitApp(); // idempotent: hides window, async cleanup, then Shutdown()
             }

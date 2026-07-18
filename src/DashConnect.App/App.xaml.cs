@@ -91,7 +91,29 @@ public partial class App : Application
 
         // Crash recovery: remove any AmneziaWG tunnel left running by a killed prior session (the app
         // isn't connected at startup, so a lingering full-tunnel service would otherwise trap traffic).
-        _ = DashConnect.Core.Network.AmneziaWgManager.KillOrphansAsync();
+        _ = Task.Run(DashConnect.Core.Network.AmneziaWgManager.KillOrphansAsync);
+
+        // Crash recovery: a killed session can leave winws.exe holding the WinDivert driver. A wedged
+        // winws keeps diverting packets on the captured ports without processing them, which stalls
+        // traffic ("the internet broke"). Reap it and reset the driver so the machine starts clean —
+        // this also covers the case where the user never presses Connect again.
+        _ = Task.Run(() => DashConnect.Core.Zapret.ZapretManager.KillOrphansAsync());
+
+        // Upgrade cleanup (WARP was removed in 1.1.14): a warp-plus.exe started by an OLDER build can
+        // still be running and still relaying — and there is no code left anywhere that would reap it.
+        // Leaving it alive would keep costing the very game latency this removal is meant to fix, so
+        // kill it once and drop its folder. Safe to remove from a future release.
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                int n = await ProcessUtil.KillByNameAsync("warp-plus");
+                if (n > 0) Log.Info("app", $"убран остаток WARP от прошлой версии ({n})");
+                var warpDir = Path.Combine(Paths.AppDataDir, "warp");
+                if (Directory.Exists(warpDir)) Directory.Delete(warpDir, recursive: true);
+            }
+            catch (Exception ex) { Log.Debug("app", $"очистка WARP: {ex.Message}"); }
+        });
 
         // Portable install: if the configured Zapret folder is gone (fresh MSI install on a new PC),
         // fall back to the copy shipped next to the exe (installed as <app>\zapret).
@@ -113,7 +135,7 @@ public partial class App : Application
         _tray.ToggleRequested += () => vm.ToggleConnectCommand.Execute(null);
         _tray.ExitRequested += ExitApp;
 
-        _orchestrator.StateChanged += s => Dispatcher.Invoke(() =>
+        _orchestrator.StateChanged += s => Dispatcher.BeginInvoke(() =>
         {
             UpdateTray();
             // Re-check for updates once we're connected: at startup the DPI bypass is off and
@@ -124,7 +146,7 @@ public partial class App : Application
                 _ = CheckForUpdatesAsync();
             }
         });
-        _orchestrator.StatusChanged += _ => Dispatcher.Invoke(UpdateTray);
+        _orchestrator.StatusChanged += _ => Dispatcher.BeginInvoke(UpdateTray);
 
         _window = new MainWindow { DataContext = vm };
         _window.Icon = IconFactory.CreateImageSource(active: false);
@@ -193,7 +215,6 @@ public partial class App : Application
                     await orch.DisconnectAsync();
                     await orch.DisposeAsync();
                 }
-                await DashConnect.Core.Network.WarpManager.KillOrphansAsync(); // stop the WARP relay on exit
                 await DashConnect.Core.Network.TgWsProxyManager.KillOrphansAsync(); // stop the Telegram bridge on exit
                 await DashConnect.Core.Network.AmneziaWgManager.KillOrphansAsync(); // remove the AmneziaWG tunnel on exit
             }
@@ -204,9 +225,35 @@ public partial class App : Application
             }
         });
 
-        // Safety net: force shutdown if cleanup ever stalls.
+        // Safety net: force shutdown if cleanup ever stalls. The async cleanup above runs on a
+        // thread-pool thread, so Shutdown() abandons it mid-flight — if we just exited, winws/sing-box
+        // would survive as orphans, DNS would stay on Cloudflare and the AmneziaWG full tunnel would
+        // stay installed (that last one can strand the machine's internet). So do a bounded, best-effort
+        // teardown of our own FIRST, then exit no matter what.
         var guard = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(6) };
-        guard.Tick += (_, _) => { guard.Stop(); try { Shutdown(); } catch { } };
+        guard.Tick += async (_, _) =>
+        {
+            guard.Stop();
+            try
+            {
+                // Task.Run + await — NEVER .Wait() here. This handler runs on the WPF dispatcher, and
+                // nothing in DashConnect.Core uses ConfigureAwait(false), so every continuation inside
+                // these calls posts back to this very thread. Blocking it made each call stall until
+                // its own timeout and return having done nothing — the DNS revert and the AmneziaWG
+                // teardown, i.e. exactly the two things this net exists to guarantee. Off the UI thread
+                // they actually complete. (It also gets AmneziaWG's synchronous sc.exe probing, which
+                // no timeout here could bound, off the dispatcher.)
+                await Task.Run(async () =>
+                {
+                    await ProcessUtil.KillByNameAsync("winws");
+                    await ProcessUtil.KillByNameAsync("sing-box");
+                    await DashConnect.Core.Network.DnsManager.RevertAsync();
+                    await DashConnect.Core.Network.AmneziaWgManager.KillOrphansAsync();
+                }).WaitAsync(TimeSpan.FromSeconds(7));
+            }
+            catch (Exception ex) { Log.Warn("app", $"аварийная очистка при выходе: {ex.Message}"); }
+            finally { try { Shutdown(); } catch { } }
+        };
         guard.Start();
     }
 

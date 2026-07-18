@@ -46,6 +46,46 @@ public static class SingboxTunnelBuilder
 
     public sealed record Result(bool Ok, string? Error, string? Json);
 
+    /// <summary>
+    /// Builds the "keep the VPN server itself out of the tunnel" route rule for an outbound.
+    /// Returns null when the server address can't be determined (we then just don't add the rule).
+    /// </summary>
+    private static Dictionary<string, object?>? BuildServerBypassRule(Dictionary<string, object?> outbound)
+    {
+        if (!outbound.TryGetValue("server", out var raw) || raw is not string host || string.IsNullOrWhiteSpace(host))
+            return null;
+
+        var cidrs = new List<string>();
+        void Add(System.Net.IPAddress a) => cidrs.Add(
+            a.AddressFamily == System.Net.Sockets.AddressFamily.InterNetworkV6 ? $"{a}/128" : $"{a}/32");
+
+        if (System.Net.IPAddress.TryParse(host, out var literal))
+        {
+            Add(literal);
+        }
+        else
+        {
+            // A domain server is dialled by its RESOLVED address, so a domain rule would never match
+            // that connection — resolve here and pin every address the server answers with.
+            try
+            {
+                var lookup = System.Net.Dns.GetHostAddressesAsync(host);
+                if (lookup.Wait(TimeSpan.FromSeconds(3)))
+                    foreach (var a in lookup.Result) Add(a);
+                else
+                    Log.Warn("singbox", $"адрес сервера {host} не разрешился за 3 с — правило обхода пропущено");
+            }
+            catch (Exception ex)
+            {
+                Log.Warn("singbox", $"не удалось разрешить адрес сервера {host}: {ex.Message}");
+            }
+        }
+
+        if (cidrs.Count == 0) return null;
+        Log.Info("singbox", $"сервер вне туннеля: {string.Join(", ", cidrs)}");
+        return new Dictionary<string, object?> { ["ip_cidr"] = cidrs, ["outbound"] = "direct" };
+    }
+
     public static Result BuildAndSave(SingboxProfile profile, bool full, GameRouteSet routes)
     {
         var outbound = SubscriptionManager.BuildOutbound(profile, out var err);
@@ -63,6 +103,17 @@ public static class SingboxTunnelBuilder
 
         // Never tunnel local/LAN traffic.
         rules.Add(new Dictionary<string, object?> { ["ip_is_private"] = true, ["outbound"] = "direct" });
+
+        // Never route the proxy server's OWN address back into the tunnel. sing-box dials the VLESS
+        // server, auto_route captures that dial in our own TUN, and route.final hands it straight back
+        // to the same proxy outbound — the tunnel tries to reach the server through itself. sing-box
+        // reports "started" and the adapter shows Up while NOTHING flows, which is exactly the
+        // "VLESS подключается, но ничего не работает" report. Confirmed in a live sing-box log:
+        //     inbound/tun[tun-in]:      inbound connection to <server>:443
+        //     outbound/vless[proxy]:   outbound connection to <server>:443
+        // With this rule the same dial goes out via outbound/direct, as it must.
+        var bypass = BuildServerBypassRule(outbound);
+        if (bypass is not null) rules.Add(bypass);
 
         string final;
         if (full)
@@ -119,7 +170,11 @@ public static class SingboxTunnelBuilder
                     ["address"] = new[] { "172.19.0.1/30" },
                     ["auto_route"] = true,
                     ["strict_route"] = true,
-                    ["stack"] = "mixed",
+                    // gvisor (userspace TCP/IP), NOT "mixed"/"system": on Windows the system stack tries
+                    // to listen on the TUN address itself and sing-box dies with
+                    // "starting tun stack: listen tcp4 172.19.0.1:0: socket: A protocol was specified…".
+                    // gvisor needs no socket on the TUN, so the tunnel actually comes up.
+                    ["stack"] = "gvisor",
                     ["mtu"] = 9000,
                 },
             },

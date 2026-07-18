@@ -46,22 +46,6 @@ if (general is not null)
     bool noCarets = strategies.SelectMany(s => s.Arguments).All(a => !a.Contains('^'));
     Check(noCarets, "no leftover ^ escape characters");
 
-    // Low-ping mode: winws must stop capturing the WIDE port ranges (that per-packet diversion is
-    // what added latency in games), while narrow ports stay so the bypass itself still works.
-    var lowPing = StrategyProvider.LoadAll(root, GameFilterMode.All, lowPing: true);
-    var lpFilters = lowPing.SelectMany(s => s.Arguments)
-        .Where(a => a.StartsWith("--wf-tcp=") || a.StartsWith("--wf-udp="))
-        .ToList();
-    Check(lpFilters.Count > 0, "low-ping: capture filters present");
-    Check(lpFilters.All(a => !a.Contains("50000-65535") && !a.Contains("1024-65535")),
-        "low-ping: wide game/voice port ranges stripped");
-    Check(lpFilters.Any(a => a.Contains("443")), "low-ping: port 443 still captured (bypass intact)");
-
-    // …and with low-ping OFF the wide ranges must still be there (no accidental regression).
-    var normal = StrategyProvider.LoadAll(root, GameFilterMode.All)
-        .SelectMany(s => s.Arguments).Where(a => a.StartsWith("--wf-udp=")).ToList();
-    Check(normal.Any(a => a.Contains("50000-65535")), "normal mode: wide ranges untouched");
-
     bool listsResolved = args0.Any(a => a.Contains("lists") && a.Contains(".txt"));
     Check(listsResolved, "hostlist paths resolved to lists .txt");
 
@@ -165,6 +149,30 @@ if (pVless is not null)
         var final = doc.RootElement.GetProperty("route").GetProperty("final").GetString();
         Check(final == "direct", "ПРОКСИ: route.final = direct (split tunnel, low ping)");
     }
+}
+
+// Regression guard: the VPN server's own address MUST be routed direct. Without this rule sing-box
+// dials the server, auto_route captures that dial in our own TUN, route.final feeds it back into the
+// same proxy outbound, and the tunnel reports "up" while carrying nothing at all. Uses a bare IP
+// (TEST-NET-3) so the assertion needs no DNS and can't flake offline.
+var vlessIp = "vless://11111111-2222-3333-4444-555555555555@203.0.113.7:443?security=none&type=tcp#ip";
+var pIp = SubscriptionManager.ParseProfile(vlessIp);
+if (pIp is not null)
+{
+    var built = SingboxTunnelBuilder.BuildAndSave(pIp, full: true, routes);
+    var pinned = false;
+    if (built.Json is not null)
+    {
+        using var doc = JsonDocument.Parse(built.Json);
+        foreach (var rule in doc.RootElement.GetProperty("route").GetProperty("rules").EnumerateArray())
+        {
+            if (rule.TryGetProperty("ip_cidr", out var cidrs) &&
+                rule.TryGetProperty("outbound", out var ob) && ob.GetString() == "direct" &&
+                cidrs.EnumerateArray().Any(c => c.GetString() == "203.0.113.7/32"))
+                pinned = true;
+        }
+    }
+    Check(pinned, "сервер вне туннеля: адрес VPN-сервера идёт direct (нет петли маршрутизации)");
 }
 Console.WriteLine();
 

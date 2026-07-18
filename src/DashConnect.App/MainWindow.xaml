@@ -220,16 +220,6 @@
                                 </Grid>
                                 <Separator Background="{StaticResource Border}" Margin="0,11"/>
                                 <Grid Margin="0,1">
-                                    <StackPanel Margin="0,0,60,0">
-                                        <TextBlock Text="Низкий пинг в играх" Style="{StaticResource Label}"/>
-                                        <TextBlock Text="не трогать игровые порты — убирает лаги/пинг в играх (голос в Discord может перестать работать)"
-                                                   Style="{StaticResource Sub}" TextWrapping="Wrap"/>
-                                    </StackPanel>
-                                    <CheckBox Style="{StaticResource Switch}" HorizontalAlignment="Right" VerticalAlignment="Center"
-                                              IsChecked="{Binding LowPingMode}" IsEnabled="{Binding CanEditSettings}"/>
-                                </Grid>
-                                <Separator Background="{StaticResource Border}" Margin="0,11"/>
-                                <Grid Margin="0,1">
                                     <StackPanel>
                                         <TextBlock Text="VPN" Style="{StaticResource Label}"/>
                                         <TextBlock Text="через ваш сервер · Telegram, игры, всё" Style="{StaticResource Sub}"/>
@@ -478,7 +468,7 @@
                                     <CheckBox Grid.Column="1" Style="{StaticResource Switch}" VerticalAlignment="Center"
                                               IsChecked="{Binding TelegramFixEnabled}" IsEnabled="{Binding CanEditSettings}"/>
                                 </Grid>
-                                <TextBlock Text="работает автоматически при нажатии «Подключить». Кнопка ниже — только если нужно переподключить Telegram вручную (мост к дата-центрам Telegram выглядит как обычный HTTPS, без чужого сервера; при сбое — резервно Cloudflare WARP или рабочий прокси)."
+                                <TextBlock Text="работает автоматически при нажатии «Подключить». Кнопка ниже — только если нужно переподключить Telegram вручную (мост к дата-центрам Telegram выглядит как обычный HTTPS, без чужого сервера; при сбое — резервно рабочий публичный прокси)."
                                            Style="{StaticResource Sub}" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,6"/>
                                 <Button Content="🔵  Переподключить Telegram" Style="{StaticResource GhostButton}"
                                         HorizontalAlignment="Stretch" Height="38" Command="{Binding FixTelegramCommand}"/>

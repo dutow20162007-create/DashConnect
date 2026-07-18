@@ -21,7 +21,6 @@ public sealed class AppOrchestrator : IAsyncDisposable
     private readonly SingboxDownloader _downloader = new();
     private readonly StrategySelector _selector;
     private readonly TgWsProxyManager _tgws = new();
-    private readonly TelegramFixer _telegramFixer = new();
     private readonly AmneziaWgManager _amnezia = new();
 
     private CancellationTokenSource? _cts;
@@ -96,7 +95,7 @@ public sealed class AppOrchestrator : IAsyncDisposable
                 // every high port (all UDP/TCP 1024-65535); doing that repeatedly during a preset sweep
                 // can wedge a live network. The game filter is applied only to the FINAL chosen preset
                 // below (a single persistent winws — safe, like double-clicking the .bat).
-                var scanStrategies = StrategyProvider.LoadAll(config.ZapretRoot, GameFilterMode.Disabled, config.LowPingMode);
+                var scanStrategies = StrategyProvider.LoadAll(config.ZapretRoot, GameFilterMode.Disabled);
 
                 // Exhaustive ("Перебрать все стратегии") forces a full re-scan even if a preset is pinned.
                 if (exhaustive || (config.AutoSelect && string.IsNullOrWhiteSpace(config.PreferredStrategy)))
@@ -120,7 +119,7 @@ public sealed class AppOrchestrator : IAsyncDisposable
                     var gameFilter = config.GameDpiEnabled ? GameFilterMode.All : GameFilterMode.Disabled;
                     ZapretSettings.ApplyGameFilter(config.ZapretRoot, gameFilter);
                     var launch = config.GameDpiEnabled
-                        ? StrategyProvider.LoadAll(config.ZapretRoot, gameFilter, config.LowPingMode)
+                        ? StrategyProvider.LoadAll(config.ZapretRoot, gameFilter)
                               .FirstOrDefault(s => s.Name == chosen.Name) ?? chosen
                         : chosen;
 
@@ -146,7 +145,11 @@ public sealed class AppOrchestrator : IAsyncDisposable
             {
                 Status("Включаю зашифрованный DNS…");
                 dnsOk = await DnsManager.ApplyAsync(ct);
-                _dnsApplied = dnsOk; // only mark applied if it actually took — else revert would run needlessly
+                // The BACKUP FILE — not the verification result — is the record that we touched system
+                // DNS. ApplyAsync can change the adapters and still return false (verification
+                // inconclusive / cancelled mid-apply); keying off dnsOk left the user stranded on
+                // Cloudflare after Disconnect. Reverting when a backup exists is always safe.
+                _dnsApplied = DnsManager.HasPendingBackup;
             }
 
             // ---- Subsystem D: Telegram WebSocket bridge (Flowseal tg-ws-proxy) ----
@@ -231,18 +234,29 @@ public sealed class AppOrchestrator : IAsyncDisposable
         var build = SingboxTunnelBuilder.BuildAndSave(profile, config.VpnFull, routes);
         if (!build.Ok) { Status($"Ошибка конфигурации: {build.Error}"); return build.Error; }
 
+        // Another VPN client's tunnel steals the traffic before ours ever sees it, so our tunnel would
+        // come up "активен" and carry nothing. Say so out loud instead of leaving the user to guess.
+        var foreign = SingboxManager.DetectForeignTunnel();
+        if (foreign is not null)
+        {
+            Status($"Внимание: работает другой VPN («{foreign}») — выключи его, иначе туннель не пойдёт");
+            Log.Warn("singbox", $"обнаружен чужой VPN-адаптер «{foreign}» — возможен конфликт маршрутов");
+        }
+
         Status($"Запускаю VPN через «{profile.Name}»…");
         var ok = await _singbox.StartAsync(exe, DashConnect.Core.Util.Paths.SingboxConfig, ct);
         if (!ok) return "sing-box не запустился (см. журнал)";
 
-        Status($"VPN активен: {profile.Name}");
+        Status(foreign is not null
+            ? $"VPN активен: {profile.Name} (но включён другой VPN «{foreign}» — выключи его)"
+            : $"VPN активен: {profile.Name}");
         return null;
     }
 
     /// <summary>
     /// "Make Telegram work": brings up the bundled WebSocket bridge (primary — no external server) and
     /// returns the tg:// link to hand to Telegram Desktop. If the bridge can't run (exe missing, port
-    /// busy), falls back to Cloudflare WARP, then a live public MTProto proxy.
+    /// busy), falls back to a live public MTProto proxy.
     /// </summary>
     public async Task<TelegramFixResult> FixTelegramAsync(AppConfig config, Action<string>? status = null, CancellationToken ct = default)
     {
@@ -259,7 +273,7 @@ public sealed class AppOrchestrator : IAsyncDisposable
                 return new TelegramFixResult(true, _tgws.TgLink,
                     "Мост Telegram поднят. В открывшемся Telegram нажми «Подключить прокси» — и всё.");
         }
-        return await _telegramFixer.FixAsync(status, ct); // WARP/MTProto fallback — kept outside the gate (can be slow)
+        return await TelegramFixer.FixAsync(status, ct); // MTProto fallback — kept outside the gate (can be slow)
     }
 
     /// <summary>Returns the persisted MTProto secret, generating and storing one on first use.</summary>
@@ -369,7 +383,6 @@ public sealed class AppOrchestrator : IAsyncDisposable
             await _zapret.DisposeAsync();
             await _singbox.DisposeAsync();
             await _tgws.DisposeAsync();
-            await _telegramFixer.DisposeAsync();
             await _amnezia.DisposeAsync();
         }
         finally { if (acquired) { try { _opGate.Release(); } catch { } } }

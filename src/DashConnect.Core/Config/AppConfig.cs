@@ -28,15 +28,6 @@ public sealed class AppConfig
     public bool GameDpiEnabled { get; set; }
 
     /// <summary>
-    /// Low-ping mode for games. winws normally captures wide UDP/TCP port ranges (50000-65535 for
-    /// Discord voice, 1024-65535 with the game filter): WinDivert then diverts EVERY packet on those
-    /// ports into userspace and reinjects it, which is what added latency/jitter in games. With this
-    /// on, those wide ranges are stripped from the capture filter — games stop being touched at all.
-    /// Trade-off: Discord VOICE may stop working (chat/YouTube are unaffected).
-    /// </summary>
-    public bool LowPingMode { get; set; }
-
-    /// <summary>
     /// When true, probe several presets and pick the best (slower, disturbs the network while
     /// testing). When false (default) a single preset is launched directly — like double-clicking
     /// the .bat — which is fast and cannot freeze.

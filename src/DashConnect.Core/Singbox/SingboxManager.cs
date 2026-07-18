@@ -16,6 +16,42 @@ public sealed class SingboxManager : IAsyncDisposable
 
     public bool IsRunning => _process is { HasExited: false };
 
+    /// <summary>
+    /// Detects ANOTHER VPN client's tunnel adapter that is currently up (v2RayTun, Nekoray, Hiddify,
+    /// Clash, Outline…). Two TUN clients fight for the same packets — whoever installs its capture last
+    /// wins, so ours reports "подключено" while the other one keeps carrying the traffic and the user
+    /// sees a tunnel that does nothing. Returns the offending adapter name, or null when we're clear.
+    /// </summary>
+    public static string? DetectForeignTunnel()
+    {
+        try
+        {
+            foreach (var ni in System.Net.NetworkInformation.NetworkInterface.GetAllNetworkInterfaces())
+            {
+                if (ni.OperationalStatus != System.Net.NetworkInformation.OperationalStatus.Up) continue;
+
+                var name = ni.Name ?? "";
+                var desc = ni.Description ?? "";
+                // Skip our own adapters (sing-box "dash0", the AmneziaWG "dashconnect" tunnel).
+                if (name.Contains("dash", StringComparison.OrdinalIgnoreCase)) continue;
+
+                bool foreign =
+                    desc.Contains("sing-tun", StringComparison.OrdinalIgnoreCase) ||
+                    name.Contains("v2ray", StringComparison.OrdinalIgnoreCase) ||
+                    name.Contains("nekoray", StringComparison.OrdinalIgnoreCase) ||
+                    name.Contains("nekobox", StringComparison.OrdinalIgnoreCase) ||
+                    name.Contains("hiddify", StringComparison.OrdinalIgnoreCase) ||
+                    name.Contains("clash", StringComparison.OrdinalIgnoreCase) ||
+                    name.Contains("outline", StringComparison.OrdinalIgnoreCase) ||
+                    name.Contains("xray", StringComparison.OrdinalIgnoreCase);
+
+                if (foreign) return name;
+            }
+        }
+        catch (Exception ex) { Log.Debug("singbox", $"проверка чужих туннелей: {ex.Message}"); }
+        return null;
+    }
+
     public static async Task KillOrphansAsync(CancellationToken ct = default)
     {
         int n = await ProcessUtil.KillByNameAsync(ProcName, ct);
@@ -118,20 +154,37 @@ public sealed class SingboxManager : IAsyncDisposable
             Log.Info("singbox", "sing-box stopped");
         }
         catch (Exception ex) { Log.Warn("singbox", $"stop: {ex.Message}"); }
-        finally { proc.Dispose(); }
+        finally { proc.Dispose(); DisposeLogWriter(); }
+    }
+
+    private StreamWriter? _logWriter;
+
+    /// <summary>
+    /// Closes the log writer deterministically. Relying only on Process.Exited leaked the handle,
+    /// because StopInternalAsync disposes the Process (killing the event) — the NEXT start then failed
+    /// to open singbox.log, silently skipped pipe draining, and sing-box blocked on a full stdout pipe.
+    /// That is why the tunnel worked on the first connect and died after a reconnect.
+    /// </summary>
+    private void DisposeLogWriter()
+    {
+        var w = _logWriter;
+        _logWriter = null;
+        if (w is not null) { try { w.Dispose(); } catch { } }
     }
 
     /// <summary>Streams a started process's stdout/stderr to a log file (drains both pipes so they
-    /// can't fill and block sing-box). The writer is closed when the process exits.</summary>
-    private static void DrainToFile(Process proc, string logFile)
+    /// can't fill and block sing-box).</summary>
+    private void DrainToFile(Process proc, string logFile)
     {
+        DisposeLogWriter(); // never carry a previous session's open handle into this start
         StreamWriter sw;
         try { sw = new StreamWriter(logFile, append: false) { AutoFlush = true }; }
         catch { return; }
+        _logWriter = sw;
         var gate = new object();
         proc.OutputDataReceived += (_, e) => { if (e.Data is not null) { lock (gate) { try { sw.WriteLine(e.Data); } catch { } } } };
         proc.ErrorDataReceived += (_, e) => { if (e.Data is not null) { lock (gate) { try { sw.WriteLine("! " + e.Data); } catch { } } } };
-        proc.Exited += (_, _) => { lock (gate) { try { sw.Dispose(); } catch { } } };
+        proc.Exited += (_, _) => DisposeLogWriter();
         try { proc.BeginOutputReadLine(); proc.BeginErrorReadLine(); } catch { }
     }
 

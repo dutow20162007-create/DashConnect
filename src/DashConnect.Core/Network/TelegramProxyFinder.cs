@@ -12,7 +12,7 @@ public sealed record MtProxy(string Server, int Port, string Secret)
 }
 
 /// <summary>
-/// Fallback for Telegram when WARP fails: fetches public MTProto proxy lists (RU-targeted,
+/// Last-resort fallback for Telegram: fetches public MTProto proxy lists (RU-targeted,
 /// auto-updated open-source repos), then TCP-tests them from the user's own machine — the only real
 /// proof they survive the ISP's IP block — and returns the first that connects.
 /// </summary>

@@ -43,8 +43,57 @@ public static class StrategyProvider
     public static bool IsValidRoot(string root)
         => Directory.Exists(root) && File.Exists(WinwsPath(root)) && Directory.Exists(ListsDir(root));
 
-    /// <summary>Parse all presets. Ordered fast-subset-first, then the rest alphabetically.</summary>
-    public static IReadOnlyList<ZapretStrategy> LoadAll(string root, GameFilterMode gameFilter, bool lowPing = false)
+    private static readonly object CacheGate = new();
+    private static (string Root, GameFilterMode Filter, long Stamp, IReadOnlyList<ZapretStrategy> Items)? _cache;
+
+    /// <summary>
+    /// Cheap fingerprint of the preset folder: file paths + write times, no file CONTENT read. Used to
+    /// invalidate the parse cache, so editing/adding a .bat is still picked up without re-parsing all
+    /// ~50 presets on every call.
+    /// </summary>
+    private static long FolderStamp(string root)
+    {
+        long stamp = 17;
+        try
+        {
+            foreach (var f in Directory.EnumerateFiles(root, "*.bat", SearchOption.TopDirectoryOnly))
+            {
+                stamp = stamp * 31 + f.GetHashCode();
+                try { stamp = stamp * 31 + File.GetLastWriteTimeUtc(f).Ticks; } catch { }
+            }
+        }
+        catch { return -1; } // unreadable folder — never serve a cache hit
+        return stamp;
+    }
+
+    /// <summary>
+    /// Parse all presets. Ordered fast-subset-first, then the rest alphabetically.
+    ///
+    /// Results are CACHED. Parsing reads and regexes every .bat in the folder, and this used to run on
+    /// the UI thread at startup (via <see cref="ListNames"/>) plus up to twice more on every connect —
+    /// enough to stall the window visibly. <see cref="ZapretStrategy"/> is immutable, so handing out the
+    /// same instances is safe.
+    /// </summary>
+    public static IReadOnlyList<ZapretStrategy> LoadAll(string root, GameFilterMode gameFilter)
+    {
+        var stamp = FolderStamp(root);
+        if (stamp != -1)
+        {
+            lock (CacheGate)
+            {
+                if (_cache is { } c && c.Stamp == stamp && c.Filter == gameFilter &&
+                    string.Equals(c.Root, root, StringComparison.OrdinalIgnoreCase))
+                    return c.Items;
+            }
+        }
+
+        var parsed = LoadAllUncached(root, gameFilter);
+        if (stamp != -1)
+            lock (CacheGate) { _cache = (root, gameFilter, stamp, parsed); }
+        return parsed;
+    }
+
+    private static IReadOnlyList<ZapretStrategy> LoadAllUncached(string root, GameFilterMode gameFilter)
     {
         var result = new List<ZapretStrategy>();
         if (!Directory.Exists(root))
@@ -61,7 +110,7 @@ public static class StrategyProvider
 
             try
             {
-                var strategy = ParseFile(file, root, gameFilter, lowPing);
+                var strategy = ParseFile(file, root, gameFilter);
                 if (strategy is not null) result.Add(strategy);
             }
             catch (Exception ex)
@@ -84,40 +133,7 @@ public static class StrategyProvider
         return ia != ib ? ia.CompareTo(ib) : string.CompareOrdinal(a.Name, b.Name);
     }
 
-    /// <summary>
-    /// Low-ping mode: drop the WIDE port ranges from winws' capture filter (--wf-tcp/--wf-udp).
-    /// Those ranges (50000-65535 for Discord voice, and 1024-65535 when the game filter is on) make
-    /// WinDivert divert EVERY packet on them into userspace and reinject it — which is exactly the
-    /// added latency/jitter players felt in games. Narrow ports (443, 80, the 50-port Discord range)
-    /// are kept, so normal bypass still works; only Discord VOICE may stop working.
-    /// </summary>
-    private const int WideRangeThreshold = 1000;
-
-    private static string StripWideRanges(string token)
-    {
-        foreach (var prefix in new[] { "--wf-tcp=", "--wf-udp=" })
-        {
-            if (!token.StartsWith(prefix, StringComparison.Ordinal)) continue;
-            var kept = token[prefix.Length..]
-                .Split(',', StringSplitOptions.RemoveEmptyEntries)
-                .Where(p => !IsWideRange(p))
-                .ToArray();
-            if (kept.Length == 0) kept = new[] { "443" }; // never emit an empty filter
-            return prefix + string.Join(',', kept);
-        }
-        return token;
-    }
-
-    private static bool IsWideRange(string part)
-    {
-        int dash = part.IndexOf('-');
-        if (dash <= 0) return false;
-        return int.TryParse(part[..dash], out var lo)
-            && int.TryParse(part[(dash + 1)..], out var hi)
-            && hi - lo > WideRangeThreshold;
-    }
-
-    public static ZapretStrategy? ParseFile(string batFile, string root, GameFilterMode gameFilter, bool lowPing = false)
+    public static ZapretStrategy? ParseFile(string batFile, string root, GameFilterMode gameFilter)
     {
         var lines = File.ReadAllLines(batFile);
         var command = ExtractCommand(lines);
@@ -143,8 +159,6 @@ public static class StrategyProvider
                 .Replace("%LISTS%", listsDir, StringComparison.Ordinal)
                 .Replace("%~dp0", rootDir, StringComparison.Ordinal)
                 .Replace("^!", "!", StringComparison.Ordinal);
-
-            if (lowPing) t = StripWideRanges(t);
 
             if (t.Length > 0) resolved.Add(t);
         }

@@ -27,7 +27,18 @@ public sealed class AmneziaWgManager : IAsyncDisposable
 
     public static string ExePath(string zapretRoot) => Path.Combine(zapretRoot, "amnezia", "amneziawg.exe");
 
-    public bool IsRunning => FindRunningService() is not null;
+    private volatile bool _running;
+
+    /// <summary>
+    /// Cached tunnel state. MUST stay a plain field read: this is evaluated from the WPF UI thread on
+    /// every status message (App.UpdateTray -> AppOrchestrator.IsConnected). It used to run
+    /// <see cref="FindRunningService"/>, which spawns TWO synchronous sc.exe processes — during a preset
+    /// sweep that froze the window ("Not Responding"), even for users who never touch AmneziaWG.
+    /// </summary>
+    public bool IsRunning => _running;
+
+    /// <summary>Live SCM probe — spawns sc.exe. NEVER call this from the UI thread.</summary>
+    private static bool IsRunningLive() => FindRunningService() is not null;
 
     /// <summary>Validates a pasted .conf and pulls out the endpoint + whether it's obfuscated AmneziaWG.</summary>
     public static AmneziaConfigInfo Parse(string configText)
@@ -79,7 +90,8 @@ public sealed class AmneziaWgManager : IAsyncDisposable
         await File.WriteAllTextAsync(Paths.AmneziaConfigFile, NormalizeNewlines(configText), new UTF8Encoding(false), ct);
 
         status?.Invoke("Поднимаю AmneziaWG-туннель…");
-        var install = await RunAsync(exe, $"/installtunnelservice \"{Paths.AmneziaConfigFile}\"", Path.GetDirectoryName(exe)!, ct);
+        _running = false;
+        var install = await RunAsync(exe, $"/installtunnelservice \"{Paths.AmneziaConfigFile}\"", Path.GetDirectoryName(exe)!, ct, 15);
         if (install.exit != 0)
         {
             Log.Warn("awg", $"installtunnelservice exit {install.exit}: {install.output}");
@@ -89,16 +101,25 @@ public sealed class AmneziaWgManager : IAsyncDisposable
 
         for (int i = 0; i < 16 && !ct.IsCancellationRequested; i++)
         {
-            if (IsRunning) { status?.Invoke($"AmneziaWG активен ({info.Endpoint})"); Log.Info("awg", "tunnel running"); return true; }
+            // Live probe here (off the UI thread) — this loop is what OWNS the cached flag.
+            if (IsRunningLive())
+            {
+                _running = true;
+                status?.Invoke($"AmneziaWG активен ({info.Endpoint})");
+                Log.Info("awg", "tunnel running");
+                return true;
+            }
             await Task.Delay(500, ct);
         }
         Log.Warn("awg", "туннель не перешёл в RUNNING");
-        return IsRunning;
+        _running = IsRunningLive();
+        return _running;
     }
 
     /// <summary>Stops + removes the tunnel service (idempotent — safe if nothing is installed).</summary>
     public async Task StopAsync(CancellationToken ct = default)
     {
+        _running = false; // clear first, so even a throwing teardown can't leave a stale "connected"
         var exe = _exePath ?? "";
         if (File.Exists(exe))
             await RunAsync(exe, $"/uninstalltunnelservice {TunnelName}", Path.GetDirectoryName(exe)!, ct);
@@ -141,8 +162,11 @@ public sealed class AmneziaWgManager : IAsyncDisposable
             { UseShellExecute = false, RedirectStandardOutput = true, RedirectStandardError = true, CreateNoWindow = true };
             using var p = Process.Start(psi);
             if (p is null) return null;
+            // Wait FIRST, then read: ReadToEnd() blocks until the pipe closes, so a hung sc.exe made the
+            // 4 s WaitForExit below unreachable. sc.exe output is a few hundred bytes — reading after
+            // exit cannot deadlock.
+            if (!p.WaitForExit(4000)) { try { p.Kill(entireProcessTree: true); } catch { } return null; }
             var outp = p.StandardOutput.ReadToEnd();
-            p.WaitForExit(4000);
             if (outp.Contains("does not exist", StringComparison.OrdinalIgnoreCase)) return null;
             var m = System.Text.RegularExpressions.Regex.Match(outp, @"STATE\s+:\s+\d+\s+(\w+)");
             return m.Success ? m.Groups[1].Value.ToUpperInvariant() : null;
@@ -150,7 +174,14 @@ public sealed class AmneziaWgManager : IAsyncDisposable
         catch { return null; }
     }
 
-    private static async Task<(int exit, string output)> RunAsync(string exe, string args, string? workingDir, CancellationToken ct)
+    /// <summary>
+    /// Runs a child process with a HARD timeout. Without one, a stuck amneziawg/sc.exe (routine when a
+    /// wintun service hangs on stop) blocked the disconnect teardown forever — and because
+    /// DisconnectAsync holds the op-gate, Connect/Disconnect/Fix-Telegram stayed dead for the rest of
+    /// the session. Teardown also passes CancellationToken.None, so the timeout is the ONLY way out.
+    /// </summary>
+    private static async Task<(int exit, string output)> RunAsync(
+        string exe, string args, string? workingDir, CancellationToken ct, int timeoutSec = 10)
     {
         try
         {
@@ -164,9 +195,22 @@ public sealed class AmneziaWgManager : IAsyncDisposable
             if (workingDir is not null) psi.WorkingDirectory = workingDir;
             using var p = Process.Start(psi);
             if (p is null) return (-1, "process start failed");
-            var outTask = p.StandardOutput.ReadToEndAsync(ct);
-            var errTask = p.StandardError.ReadToEndAsync(ct);
-            await p.WaitForExitAsync(ct);
+
+            var outTask = p.StandardOutput.ReadToEndAsync();
+            var errTask = p.StandardError.ReadToEndAsync();
+
+            using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            cts.CancelAfter(TimeSpan.FromSeconds(timeoutSec));
+            try
+            {
+                await p.WaitForExitAsync(cts.Token);
+            }
+            catch (OperationCanceledException)
+            {
+                Log.Warn("awg", $"'{Path.GetFileName(exe)} {args}' завис — убиваю по таймауту");
+                try { p.Kill(entireProcessTree: true); } catch { }
+                return (-1, "timeout");
+            }
             return (p.ExitCode, ((await outTask) + (await errTask)).Trim());
         }
         catch (Exception ex) { return (-1, ex.Message); }
