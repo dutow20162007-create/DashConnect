@@ -1,0 +1,30 @@
+# Line endings and binary safety, pinned in the repo instead of left to each machine's git config.
+#
+# Nothing is broken today: this machine has core.autocrlf=true, so the shell scripts are already
+# stored with LF (verified — zero CR bytes in their blobs). But that correctness depends on a
+# GLOBAL setting on one particular PC. A contributor with autocrlf=false editing gradlew on Windows
+# would commit CRLF, and a shell script with CRLF does not run on Linux or macOS at all
+# ("bad interpreter: /bin/sh^M"). These rules make the repo enforce it regardless of local config.
+*.sh    text eol=lf
+gradlew text eol=lf
+
+# Never let the content heuristic touch these. The repo ships ~65 MB of prebuilt binaries
+# (libbox.aar, the Go .so bridges, the release MSI/APK): one wrong CRLF substitution corrupts
+# them irrecoverably, and the damage stays invisible until something fails to load at runtime.
+*.aar      binary
+*.so       binary
+*.jar      binary
+*.apk      binary
+*.msi      binary
+*.exe      binary
+*.dll      binary
+*.sys      binary
+*.keystore binary
+*.jks      binary
+*.png      binary
+*.jpg      binary
+*.jpeg     binary
+*.ico      binary
+*.webp     binary
+*.ttf      binary
+*.otf      binary
