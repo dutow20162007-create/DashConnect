@@ -1,0 +1,11 @@
+/build
+/debug
+/release
+*.aar
+*.jar
+
+# ...but libbox.aar IS part of the source drop. It is the sing-box engine (VLESS + AmneziaWG)
+# built with gomobile from a toolchain that lives outside this repo, so it cannot be regenerated
+# from a fresh clone — without it the project does not build at all. The blanket *.aar rule above
+# is inherited from upstream ByeDPIAndroid, which never vendored an .aar.
+!/libs/libbox.aar

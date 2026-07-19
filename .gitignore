@@ -1,7 +1,9 @@
 # Build output (scoped to source projects so zapret/bin ships in the repo)
 src/**/bin/
 src/**/obj/
-dist/
+# Anchored: an unanchored `dist/` also matched mobile/app/src/main/cpp/byedpi/dist/, silently
+# dropping files out of a vendored third-party tree we redistribute.
+/dist/
 *.user
 
 # IDE
