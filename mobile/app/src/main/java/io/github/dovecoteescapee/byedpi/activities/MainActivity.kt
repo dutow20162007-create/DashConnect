@@ -152,11 +152,11 @@ class MainActivity : ComponentActivity() {
         val info = pendingUpdate ?: return
         updateStatus.value = "Скачиваю обновление…"
         lifecycleScope.launch {
-            val file = UpdateChecker.download(this@MainActivity, info.apkUrl) { p ->
+            val file = UpdateChecker.download(this@MainActivity, info.apkUrl, info.sha256Url) { p ->
                 updateStatus.value = "Скачиваю обновление… $p%"
             }
             if (file == null) {
-                updateStatus.value = "Не удалось скачать. Открой страницу релизов вручную."
+                updateStatus.value = "Не удалось скачать или проверить обновление. Открой страницу релизов вручную."
                 return@launch
             }
             updateStatus.value = "Запускаю установку…"

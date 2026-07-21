@@ -50,7 +50,7 @@ public partial class UpdateWindow : Window
         StatusText.Text = "Скачивание…";
 
         var progress = new Progress<double>(p => Progress.Value = p);
-        var file = await UpdateChecker.DownloadAsync(_info.DownloadUrl, progress);
+        var file = await UpdateChecker.DownloadAsync(_info.DownloadUrl, progress, _info.Sha256Url);
 
         if (file is null || !file.EndsWith(".msi", StringComparison.OrdinalIgnoreCase))
         {

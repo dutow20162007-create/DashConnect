@@ -8,9 +8,22 @@ using DashConnect.Core.Zapret;
 // sing-box config generation) against the REAL Zapret folder — no admin, no network, no UAC — so the
 // core can be validated in CI or from a plain shell.
 
-var root = args.Length > 0
-    ? args[0]
-    : @"C:\Users\HU9O\Desktop\zapret-discord-youtube\zapret-discord-youtube-1.9.9c";
+// Zapret root: explicit CLI arg wins; otherwise walk up from the working directory to find the
+// `zapret` folder shipped in the repo, so the harness runs unchanged locally and in CI (no machine-
+// specific path baked in).
+static string? FindZapretRoot()
+{
+    var dir = new DirectoryInfo(Directory.GetCurrentDirectory());
+    while (dir is not null)
+    {
+        var candidate = Path.Combine(dir.FullName, "zapret");
+        if (Directory.Exists(candidate)) return candidate;
+        dir = dir.Parent;
+    }
+    return null;
+}
+
+var root = args.Length > 0 ? args[0] : FindZapretRoot() ?? "zapret";
 
 int failures = 0;
 void Check(bool ok, string label)
@@ -203,6 +216,36 @@ Check(wg.Valid && !wg.Obfuscated, "plain WireGuard parsed, not flagged obfuscate
 
 Check(!AmneziaWgManager.Parse("").Valid, "empty config rejected");
 Check(!AmneziaWgManager.Parse("[Interface]\nPrivateKey = k").Valid, "config without [Peer]/Endpoint rejected");
+Console.WriteLine();
+
+// ---- 7. Binary integrity: the executables we actually launch (winws + WinDivert driver/dll) must
+//         match the SHA-256 recorded in the shipped manifest, so a swapped/tampered binary fails CI. ----
+Console.WriteLine("[7] Binary integrity (winws + WinDivert vs SHA256SUMS)");
+var sumsFile = Path.Combine(root, "SHA256SUMS.txt");
+if (!File.Exists(sumsFile))
+{
+    Check(false, $"SHA256SUMS.txt present at {sumsFile}");
+}
+else
+{
+    string[] guarded = { "./bin/winws.exe", "./bin/WinDivert.dll", "./bin/WinDivert64.sys" };
+    var sums = File.ReadAllLines(sumsFile)
+        .Select(l => l.Trim())
+        .Where(l => l.Length > 0 && !l.StartsWith('#'))
+        .Select(l => l.Split(new[] { ' ' }, 2, StringSplitOptions.RemoveEmptyEntries))
+        .Where(p => p.Length == 2)
+        .ToDictionary(p => p[1].Trim(), p => p[0].Trim().ToLowerInvariant());
+
+    foreach (var rel in guarded)
+    {
+        var path = Path.Combine(root, rel.TrimStart('.', '/', '\\').Replace('/', Path.DirectorySeparatorChar));
+        if (!sums.TryGetValue(rel, out var expected)) { Check(false, $"{rel} listed in SHA256SUMS"); continue; }
+        if (!File.Exists(path)) { Check(false, $"{rel} present on disk"); continue; }
+        using var fs = File.OpenRead(path);
+        var actual = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(fs)).ToLowerInvariant();
+        Check(actual == expected, $"{rel} SHA-256 matches manifest");
+    }
+}
 Console.WriteLine();
 
 Console.WriteLine(failures == 0 ? "ALL CHECKS PASSED" : $"{failures} CHECK(S) FAILED");

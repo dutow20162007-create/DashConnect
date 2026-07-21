@@ -1,0 +1,130 @@
+name: Release
+
+# Tag a commit `vX.Y.Z` (matching UpdateChecker.CurrentVersion) to build and publish the release.
+# The PC MSI is always built and attached with a .sha256 the in-app updater verifies. The Android
+# APK is attached only when a signing keystore is configured in repo secrets — CI must NOT sign with
+# a fresh key, or existing users could no longer update (Android enforces same-signature upgrades).
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to build (without the leading v), e.g. 1.1.15'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  windows-msi:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Resolve version
+        id: ver
+        shell: pwsh
+        run: |
+          $v = if ('${{ github.event_name }}' -eq 'workflow_dispatch') { '${{ inputs.version }}' }
+               else { '${{ github.ref_name }}'.TrimStart('v') }
+          "version=$v" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+      - name: Build + SelfTest
+        run: |
+          dotnet build DashConnect.sln -c Release -v minimal
+          dotnet run --project src/DashConnect.SelfTest -c Release
+
+      - name: Publish self-contained exe
+        run: pwsh ./build.ps1
+
+      - name: Install WiX
+        run: dotnet tool install --global wix
+
+      - name: Build MSI + SHA-256 sidecar
+        shell: pwsh
+        run: |
+          $v = '${{ steps.ver.outputs.version }}'
+          $msi = "dist/DashConnect-$v.msi"
+          wix build installer/DashConnect.wxs -arch x64 -o $msi
+          $hash = (Get-FileHash $msi -Algorithm SHA256).Hash.ToLower()
+          "$hash  DashConnect-$v.msi`n" | Out-File -FilePath "$msi.sha256" -Encoding ascii -NoNewline
+
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: pwsh
+        run: |
+          $v = '${{ steps.ver.outputs.version }}'
+          $tag = "v$v"
+          $assets = "dist/DashConnect-$v.msi", "dist/DashConnect-$v.msi.sha256"
+          gh release view $tag *> $null
+          if ($LASTEXITCODE -eq 0) {
+            gh release upload $tag $assets --clobber
+          } else {
+            gh release create $tag $assets --title "Dash Connect $v" --notes "Build $v."
+          }
+          gh release edit $tag --draft=false
+
+  android-apk:
+    runs-on: ubuntu-latest
+    # Only runs when a signing keystore is configured — see the note at the top of this file.
+    if: ${{ github.event_name == 'push' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check for signing secret
+        id: gate
+        run: |
+          if [ -n "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" ]; then
+            echo "signed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "signed=false" >> "$GITHUB_OUTPUT"
+            echo "No ANDROID_KEYSTORE_BASE64 secret — skipping Android APK (PC MSI still released)."
+          fi
+
+      - uses: actions/setup-java@v4
+        if: steps.gate.outputs.signed == 'true'
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        if: steps.gate.outputs.signed == 'true'
+        uses: android-actions/setup-android@v3
+
+      - name: Install NDK
+        if: steps.gate.outputs.signed == 'true'
+        run: sdkmanager "ndk;27.1.12297006"
+
+      - name: Decode keystore
+        if: steps.gate.outputs.signed == 'true'
+        run: echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > "$RUNNER_TEMP/release.jks"
+
+      - name: Build release APK
+        if: steps.gate.outputs.signed == 'true'
+        working-directory: mobile
+        run: ./gradlew --no-daemon assembleRelease
+
+      - name: Sign, checksum and upload APK
+        if: steps.gate.outputs.signed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          KS_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASS: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          v="${GITHUB_REF_NAME#v}"
+          BT=$(ls "$ANDROID_HOME"/build-tools/* -d | sort -V | tail -1)
+          UNSIGNED=$(find mobile/app/build/outputs/apk/release -name '*.apk' | head -1)
+          OUT="DashConnect-$v.apk"
+          "$BT/zipalign" -f 4 "$UNSIGNED" "$OUT"
+          "$BT/apksigner" sign --ks "$RUNNER_TEMP/release.jks" \
+            --ks-pass "pass:$KS_PASS" --ks-key-alias "$KEY_ALIAS" --key-pass "pass:$KEY_PASS" "$OUT"
+          sha256sum "$OUT" | awk '{print $1"  '"$OUT"'"}' > "$OUT.sha256"
+          gh release upload "v$v" "$OUT" "$OUT.sha256" --clobber

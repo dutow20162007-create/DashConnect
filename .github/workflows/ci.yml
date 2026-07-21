@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  # ---- Windows: build the whole .NET solution and run the headless SelfTest harness ----
+  pc:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Build solution
+        run: dotnet build DashConnect.sln -c Release -v minimal
+
+      - name: Run SelfTest against bundled zapret
+        # No arg -> the harness walks up to find the repo's `zapret` folder.
+        run: dotnet run --project src/DashConnect.SelfTest -c Release
+
+  # ---- Android: assemble a debug APK (also compiles the native byedpi + hev-socks5-tunnel code) ----
+  android:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install NDK
+        run: sdkmanager "ndk;27.1.12297006"
+
+      - name: Build debug APK
+        run: ./gradlew --no-daemon assembleDebug

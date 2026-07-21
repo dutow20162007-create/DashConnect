@@ -1,12 +1,16 @@
 using System.Net.Http;
 using System.Net.Http.Headers;
+using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using DashConnect.Core.Logging;
 
 namespace DashConnect.Core.Update;
 
-public sealed record UpdateInfo(string Version, string DownloadUrl, string Notes);
+/// <summary><paramref name="Sha256Url"/> points at a sibling <c>&lt;asset&gt;.sha256</c> file whose
+/// first 64-hex token is the expected digest of the installer; null when the release didn't publish
+/// one (older releases).</summary>
+public sealed record UpdateInfo(string Version, string DownloadUrl, string Notes, string? Sha256Url = null);
 
 /// <summary>
 /// Checks GitHub Releases for a newer version and downloads the installer. The current version is a
@@ -45,18 +49,17 @@ public static class UpdateChecker
             if (string.IsNullOrWhiteSpace(tag)) return null;
 
             var notes = root.TryGetProperty("body", out var b) ? b.GetString() ?? "" : "";
-            string? msi = null;
+            string? msi = null, sha = null;
             if (root.TryGetProperty("assets", out var assets) && assets.ValueKind == JsonValueKind.Array)
                 foreach (var a in assets.EnumerateArray())
                 {
                     var name = a.TryGetProperty("name", out var n) ? n.GetString() ?? "" : "";
                     if (name.EndsWith(".msi", StringComparison.OrdinalIgnoreCase))
-                    {
                         msi = a.GetProperty("browser_download_url").GetString();
-                        break;
-                    }
+                    else if (name.EndsWith(".msi.sha256", StringComparison.OrdinalIgnoreCase))
+                        sha = a.GetProperty("browser_download_url").GetString();
                 }
-            return new UpdateInfo(tag, msi ?? ReleasesPage, notes);
+            return new UpdateInfo(tag, msi ?? ReleasesPage, notes, sha);
         }
         catch (Exception ex)
         {
@@ -81,7 +84,7 @@ public static class UpdateChecker
             if (!m.Success) return null;
             var tag = m.Groups[1].Value;
             var msi = $"https://github.com/{Owner}/{Repo}/releases/download/v{tag}/DashConnect-{tag}.msi";
-            return new UpdateInfo(tag, msi, "");
+            return new UpdateInfo(tag, msi, "", msi + ".sha256");
         }
         catch (Exception ex)
         {
@@ -90,8 +93,11 @@ public static class UpdateChecker
         }
     }
 
-    /// <summary>Downloads the installer to a temp file and returns its path (null on failure).</summary>
-    public static async Task<string?> DownloadAsync(string url, IProgress<double>? progress = null, CancellationToken ct = default)
+    /// <summary>Downloads the installer to a temp file and returns its path (null on failure). When the
+    /// release published a <c>.sha256</c>, the file is verified against it and a MISMATCH fails the
+    /// download (returns null) — we never hand a tampered/corrupt installer to msiexec.</summary>
+    public static async Task<string?> DownloadAsync(
+        string url, IProgress<double>? progress = null, string? sha256Url = null, CancellationToken ct = default)
     {
         try
         {
@@ -101,16 +107,25 @@ public static class UpdateChecker
             resp.EnsureSuccessStatusCode();
             var total = resp.Content.Headers.ContentLength ?? -1L;
 
-            await using var src = await resp.Content.ReadAsStreamAsync(ct);
-            await using var dst = File.Create(dest);
-            var buffer = new byte[81920];
-            long read = 0;
-            int n;
-            while ((n = await src.ReadAsync(buffer, ct)) > 0)
+            await using (var src = await resp.Content.ReadAsStreamAsync(ct))
+            await using (var dst = File.Create(dest))
             {
-                await dst.WriteAsync(buffer.AsMemory(0, n), ct);
-                read += n;
-                if (total > 0) progress?.Report((double)read / total);
+                var buffer = new byte[81920];
+                long read = 0;
+                int n;
+                while ((n = await src.ReadAsync(buffer, ct)) > 0)
+                {
+                    await dst.WriteAsync(buffer.AsMemory(0, n), ct);
+                    read += n;
+                    if (total > 0) progress?.Report((double)read / total);
+                }
+            }
+
+            if (!string.IsNullOrWhiteSpace(sha256Url) && !await VerifyChecksumAsync(dest, sha256Url, ct))
+            {
+                Log.Error("update", "контрольная сумма обновления не совпала — установка отменена");
+                try { File.Delete(dest); } catch { }
+                return null;
             }
             return dest;
         }
@@ -119,6 +134,29 @@ public static class UpdateChecker
             Log.Warn("update", $"скачивание обновления не удалось: {ex.Message}");
             return null;
         }
+    }
+
+    /// <summary>Downloads the expected digest and compares it to the file's actual SHA-256. On any
+    /// error fetching the checksum it returns true (fail-open — an older release without a .sha256
+    /// must still be installable); only a real, confirmed mismatch returns false.</summary>
+    private static async Task<bool> VerifyChecksumAsync(string file, string sha256Url, CancellationToken ct)
+    {
+        string expected;
+        try
+        {
+            using var http = NewClient(TimeSpan.FromSeconds(30));
+            var text = await http.GetStringAsync(sha256Url, ct);
+            var m = Regex.Match(text, "[0-9a-fA-F]{64}");
+            if (!m.Success) { Log.Debug("update", "в .sha256 нет валидного хеша — пропускаю проверку"); return true; }
+            expected = m.Value.ToLowerInvariant();
+        }
+        catch (Exception ex) { Log.Debug("update", $".sha256 недоступен ({ex.Message}) — пропускаю проверку"); return true; }
+
+        await using var fs = File.OpenRead(file);
+        var hash = Convert.ToHexString(await SHA256.HashDataAsync(fs, ct)).ToLowerInvariant();
+        if (hash == expected) { Log.Info("update", "контрольная сумма обновления подтверждена (SHA-256)"); return true; }
+        Log.Error("update", $"SHA-256 не совпал: ожидалось {expected}, получено {hash}");
+        return false;
     }
 
     private static HttpClient NewClient(TimeSpan timeout)

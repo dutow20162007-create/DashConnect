@@ -7,8 +7,10 @@ import org.json.JSONObject
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
+import java.security.MessageDigest
 
-data class UpdateInfo(val version: String, val apkUrl: String, val notes: String)
+/** [sha256Url] points at a sibling `<apk>.sha256` (null on older releases without one). */
+data class UpdateInfo(val version: String, val apkUrl: String, val notes: String, val sha256Url: String? = null)
 
 /**
  * The phone counterpart of the PC UpdateChecker: looks up the newest GitHub release and reports one
@@ -34,16 +36,17 @@ object UpdateChecker {
         val o = JSONObject(body)
         val tag = o.optString("tag_name").trimStart('v', 'V')
         var apk = ""
+        var sha = ""
         o.optJSONArray("assets")?.let { arr ->
             for (i in 0 until arr.length()) {
                 val a = arr.getJSONObject(i)
-                if (a.optString("name").endsWith(".apk", ignoreCase = true)) {
-                    apk = a.optString("browser_download_url"); break
-                }
+                val name = a.optString("name")
+                if (name.endsWith(".apk.sha256", ignoreCase = true)) sha = a.optString("browser_download_url")
+                else if (name.endsWith(".apk", ignoreCase = true)) apk = a.optString("browser_download_url")
             }
         }
         if (tag.isEmpty()) null
-        else UpdateInfo(tag, apk.ifEmpty { apkUrlFor(tag) }, o.optString("body"))
+        else UpdateInfo(tag, apk.ifEmpty { apkUrlFor(tag) }, o.optString("body"), sha.ifEmpty { null })
     } catch (e: Exception) {
         null
     }
@@ -57,7 +60,7 @@ object UpdateChecker {
         val location = c.getHeaderField("Location") ?: ""
         c.disconnect()
         val tag = location.substringAfterLast("/tag/", "").trimStart('v', 'V')
-        if (tag.isEmpty()) null else UpdateInfo(tag, apkUrlFor(tag), "")
+        if (tag.isEmpty()) null else UpdateInfo(tag, apkUrlFor(tag), "", apkUrlFor(tag) + ".sha256")
     } catch (e: Exception) {
         null
     }
@@ -66,8 +69,12 @@ object UpdateChecker {
     private fun apkUrlFor(v: String) =
         "https://github.com/$OWNER/$REPO/releases/download/v$v/DashConnect-$v.apk"
 
-    /** Downloads the APK into cache and returns the file, or null on failure. */
-    suspend fun download(ctx: Context, url: String, onProgress: (Int) -> Unit = {}): File? =
+    /**
+     * Downloads the APK into cache and returns the file, or null on failure. When [sha256Url] is
+     * given and the release published a checksum, the file is verified against it and a confirmed
+     * MISMATCH fails the download (returns null) so a tampered/corrupt APK is never installed.
+     */
+    suspend fun download(ctx: Context, url: String, sha256Url: String? = null, onProgress: (Int) -> Unit = {}): File? =
         withContext(Dispatchers.IO) {
             try {
                 val dir = File(ctx.cacheDir, "update").apply { mkdirs() }
@@ -94,11 +101,37 @@ object UpdateChecker {
                     }
                 }
                 c.disconnect()
-                if (out.length() > 0) out else null
+                if (out.length() <= 0) return@withContext null
+                if (!verifyChecksum(out, sha256Url)) { out.delete(); return@withContext null }
+                out
             } catch (e: Exception) {
                 null
             }
         }
+
+    /** Fail-open: if the checksum can't be fetched/parsed (older release), returns true; only a real
+     *  mismatch returns false. */
+    private fun verifyChecksum(file: File, sha256Url: String?): Boolean {
+        if (sha256Url.isNullOrEmpty()) return true
+        val expected = try {
+            val c = (URL(sha256Url).openConnection() as HttpURLConnection).apply {
+                instanceFollowRedirects = true; connectTimeout = 10000; readTimeout = 15000
+                setRequestProperty("User-Agent", "DashConnect")
+            }
+            if (c.responseCode !in 200..299) { c.disconnect(); return true }
+            val text = c.inputStream.bufferedReader().use { it.readText() }
+            c.disconnect()
+            Regex("[0-9a-fA-F]{64}").find(text)?.value?.lowercase() ?: return true
+        } catch (e: Exception) { return true }
+
+        val md = MessageDigest.getInstance("SHA-256")
+        file.inputStream().use { input ->
+            val buf = ByteArray(64 * 1024)
+            while (true) { val n = input.read(buf); if (n < 0) break; md.update(buf, 0, n) }
+        }
+        val actual = md.digest().joinToString("") { "%02x".format(it) }
+        return actual == expected
+    }
 
     private fun httpGet(url: String): String {
         val c = (URL(url).openConnection() as HttpURLConnection).apply {

@@ -9,4 +9,10 @@
     <LangVersion>latest</LangVersion>
   </PropertyGroup>
 
+  <ItemGroup>
+    <!-- DPAPI (ProtectedData) for at-rest encryption of secrets in config.json. Windows-only API;
+         guarded by OperatingSystem.IsWindows() so the cross-platform SelfTest still runs on Linux. -->
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="8.0.0" />
+  </ItemGroup>
+
 </Project>

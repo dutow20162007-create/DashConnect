@@ -1,3 +1,6 @@
+using System.Text.Json.Serialization;
+using DashConnect.Core.Util;
+
 namespace DashConnect.Core.Config;
 
 /// <summary>Game-filter mode for Zapret (whether winws also desyncs high game ports).</summary>
@@ -15,9 +18,10 @@ public enum VpnKind
 /// <summary>Persisted user settings. Serialized to %AppData%\DashConnect\config.json.</summary>
 public sealed class AppConfig
 {
-    /// <summary>Root folder of the Zapret distribution (contains bin\, lists\, *.bat).</summary>
-    public string ZapretRoot { get; set; } =
-        @"C:\Users\HU9O\Desktop\zapret-discord-youtube\zapret-discord-youtube-1.9.9c";
+    /// <summary>Root folder of the Zapret distribution (contains bin\, lists\, *.bat). Defaults to the
+    /// copy shipped next to the executable (installed as &lt;app&gt;\zapret); App startup falls back to
+    /// this too if a previously-configured folder has gone missing.</summary>
+    public string ZapretRoot { get; set; } = Path.Combine(Paths.BaseDir, "zapret");
 
     // ---- DPI bypass (Zapret / winws) ----
 
@@ -59,13 +63,17 @@ public sealed class AppConfig
     /// <summary>true = ТУННЕЛЬ (route everything); false = ПРОКСИ (smart split, lowest ping). sing-box only.</summary>
     public bool VpnFull { get; set; }
 
-    /// <summary>Subscription URL, or a single vless://ss://vmess://trojan:// link.</summary>
+    /// <summary>Subscription URL, or a single vless://ss://vmess://trojan:// link.
+    /// Encrypted at rest (DPAPI) — it can embed server credentials.</summary>
+    [JsonConverter(typeof(DpapiStringConverter))]
     public string SubscriptionUrl { get; set; } = "";
 
     /// <summary>Name of the profile selected from the subscription.</summary>
     public string? SelectedProfileName { get; set; }
 
-    /// <summary>Raw AmneziaWG .conf text (used when VpnKind == Amnezia). Kept so it survives restarts.</summary>
+    /// <summary>Raw AmneziaWG .conf text (used when VpnKind == Amnezia). Kept so it survives restarts.
+    /// Encrypted at rest (DPAPI) — it contains the WireGuard private key.</summary>
+    [JsonConverter(typeof(DpapiStringConverter))]
     public string AmneziaConfig { get; set; } = "";
 
     // ---- Telegram (WebSocket bridge — Flowseal tg-ws-proxy) ----
@@ -76,7 +84,8 @@ public sealed class AppConfig
     public bool TelegramFixEnabled { get; set; } = true;
 
     /// <summary>Stable 32-hex MTProto secret for the local proxy. Generated once and kept, so the
-    /// tg:// proxy link Telegram remembers keeps matching across restarts.</summary>
+    /// tg:// proxy link Telegram remembers keeps matching across restarts. Encrypted at rest (DPAPI).</summary>
+    [JsonConverter(typeof(DpapiStringConverter))]
     public string TgWsProxySecret { get; set; } = "";
 
     /// <summary>True once Telegram has been handed the tg:// proxy link, so we auto-prompt only on the
