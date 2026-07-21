@@ -44,7 +44,8 @@ jobs:
         run: pwsh ./build.ps1
 
       - name: Install WiX
-        run: dotnet tool install --global wix
+        # Pinned: WiX v7+ requires accepting the paid Open Source Maintenance Fee EULA (WIX7015).
+        run: dotnet tool install --global wix --version 5.0.2
 
       - name: Build MSI + SHA-256 sidecar
         shell: pwsh
